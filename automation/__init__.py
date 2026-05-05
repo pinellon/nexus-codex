@@ -1,0 +1,2 @@
+"""Automacoes do NEXUS."""
+
