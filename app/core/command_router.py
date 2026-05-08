@@ -43,6 +43,27 @@ class CommandRouter:
         if not command_text:
             return Command("empty", "system", raw=raw, normalized=normalized)
 
+        if command_text in {"ajuda", "comandos", "o que voce faz", "o que vc faz"}:
+            return Command("help", "system", {"text": command_text}, raw, normalized)
+
+        if "modo foco" in command_text or "foco" == command_text:
+            return Command("run_template", "automation", {"template": "modo_foco"}, raw, normalized)
+
+        if "modo aula" in command_text or "modo estudo" in command_text:
+            return Command("run_template", "automation", {"template": "modo_aula"}, raw, normalized)
+
+        if "modo apresentacao" in command_text or "modo apresentacao" in command_text:
+            return Command("run_template", "automation", {"template": "modo_apresentacao"}, raw, normalized)
+
+        if "diagnostico rapido" in command_text:
+            return Command("run_template", "automation", {"template": "diagnostico_rapido"}, raw, normalized)
+
+        if "diagnostico do projeto" in command_text or "saude do projeto" in command_text:
+            return Command("project_health", "diagnostics", {}, raw, normalized)
+
+        if "ultimos eventos" in command_text or "historico da sessao" in command_text:
+            return Command("session_summary", "diagnostics", {}, raw, normalized)
+
         try:
             from app.intent_desktop_actions import detect_desktop_intent
             intent = detect_desktop_intent(command_text)
