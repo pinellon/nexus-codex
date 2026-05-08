@@ -1,19 +1,26 @@
-"""Confirmacoes para comandos perigosos."""
+"""Camada de compatibilidade para confirmações e bloqueios."""
+
+from __future__ import annotations
+
+from app.action_policy import PolicyDecision, assess_intent
 
 
-_DANGEROUS = {"desligar_pc", "reiniciar_pc", "suspender_pc", "bloquear_tela"}
+def avaliar_intent(intent_name: str, params: dict | None = None) -> PolicyDecision:
+    return assess_intent(intent_name, params)
 
 
-def precisa_confirmacao(intent_name: str) -> bool:
-    return intent_name in _DANGEROUS
+def precisa_confirmacao(intent_name: str, params: dict | None = None) -> bool:
+    return assess_intent(intent_name, params).requires_confirmation
 
 
-def mensagem_confirmacao(intent_name: str) -> str:
-    labels = {
-        "desligar_pc": "Desligar o computador agora?",
-        "reiniciar_pc": "Reiniciar o computador agora?",
-        "suspender_pc": "Suspender o computador agora?",
-        "bloquear_tela": "Bloquear a tela agora?",
-    }
-    return labels.get(intent_name, "Confirmar esta acao?")
+def mensagem_confirmacao(intent_name: str, params: dict | None = None) -> str:
+    decision = assess_intent(intent_name, params)
+    return decision.message or "Confirmar esta ação?"
 
+
+def acao_bloqueada(intent_name: str, params: dict | None = None) -> bool:
+    return not assess_intent(intent_name, params).allowed
+
+
+def motivo_bloqueio(intent_name: str, params: dict | None = None) -> str:
+    return assess_intent(intent_name, params).reason

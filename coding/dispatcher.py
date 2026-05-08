@@ -1,4 +1,4 @@
-"""Dispatcher de intencoes do NEXUS CODER."""
+"""Dispatcher de intenções do NEXUS CODER."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ try:
 except Exception:
     pyperclip = None
 
+from automation.app_launcher import abrir_app, listar_apps, registrar_app
 from coding.code_assistant import (
     completar_codigo,
     converter_linguagem,
@@ -35,22 +36,41 @@ from coding.file_manager import (
     ler_arquivo,
     listar_projeto,
 )
-from coding.git_ops import add, commit, commit_rapido, criar_branch, diff, log, pull, push, resumo_repositorio, status
+from coding.git_ops import (
+    add,
+    commit,
+    commit_rapido,
+    criar_branch,
+    diff,
+    log,
+    pull,
+    push,
+    resumo_repositorio,
+    status,
+)
 from coding.intent_coding import CodingIntent
+from coding.project_context import summarize_context
+from coding.scaffolder import criar_projeto, listar_templates
 from coding.snippet_vault import buscar_snippets, estatisticas, formatar_lista, listar_snippets, salvar_snippet
 from coding.terminal import executar, get_history, verificar_ambiente
+from coding.workspace_ai import apply_last_patch, format_workspace_result, preview_last_patch, run_workspace_ai
 
 try:
     from app.error_handler import handle_error
     from app.logger import log_action
 except ImportError:
-    def handle_error(error: Exception) -> str: return str(error)
-    def log_action(text: str): print(text)
+    def handle_error(error: Exception) -> str:  # type: ignore[override]
+        return str(error)
+
+    def log_action(text: str):  # type: ignore[override]
+        print(text)
+
 
 _contexto_codigo = ""
 _arquivo_atual = ""
 _linguagem_atual = "python"
 _stack_projeto = ""
+_editor_bridge = None
 
 
 def set_contexto(codigo: str = "", arquivo: str = "", linguagem: str = "", stack: str = ""):
@@ -63,6 +83,11 @@ def set_contexto(codigo: str = "", arquivo: str = "", linguagem: str = "", stack
         _linguagem_atual = linguagem
     if stack:
         _stack_projeto = stack
+
+
+def set_editor_bridge(editor_bridge):
+    global _editor_bridge
+    _editor_bridge = editor_bridge
 
 
 def _get_codigo(params: dict) -> str:
@@ -89,6 +114,51 @@ def executar_intent(intent: CodingIntent, confirm_callback: Optional[Callable] =
     params = intent.params
     log_action(f"CODER: {name} {params}")
     try:
+        if name == "abrir_app":
+            return str(abrir_app(params.get("app", "")))
+        if name == "listar_apps":
+            return listar_apps()
+        if name == "registrar_app":
+            return str(registrar_app(params.get("alias", ""), params.get("target", "")))
+
+        if name == "listar_templates":
+            return listar_templates()
+
+        if name == "criar_projeto":
+            result = criar_projeto(
+                params.get("nome", ""),
+                params.get("template", ""),
+                params.get("destino", ""),
+            )
+            return result.message
+
+        if name == "contexto_projeto":
+            return summarize_context()
+
+        if name == "workspace_ai_patch":
+            result, diff_text = run_workspace_ai(
+                params.get("pedido", ""),
+                action_id=params.get("acao", "generate"),
+                language=_linguagem_atual,
+            )
+            return format_workspace_result(result, diff_text)
+
+        if name == "preview_ai_patch":
+            return f"```diff\n{preview_last_patch()}\n```"
+
+        if name == "aplicar_ai_patch":
+            if confirm_callback:
+                ok = confirm_callback("Aplicar o ultimo patch gerado pela IA no projeto ativo?")
+                if not ok:
+                    return "Acao cancelada."
+            return apply_last_patch()
+
+        if name == "run_ruff":
+            return executar("python -m ruff check .", confirmar_callback=confirm_callback).format()
+
+        if name == "run_pytest":
+            return executar("python -m pytest -q", timeout=90, confirmar_callback=confirm_callback).format()
+
         if name == "gerar_codigo":
             return gerar_codigo(params.get("descricao", ""), params.get("linguagem", _linguagem_atual), _arquivo_atual)
 
@@ -101,53 +171,72 @@ def executar_intent(intent: CodingIntent, confirm_callback: Optional[Callable] =
 
         if name == "explicar_codigo":
             code = _get_codigo(params)
-            return explicar_codigo(code, params.get("nivel", "intermediario")) if code else "Cole ou selecione o codigo que deseja explicar."
+            return explicar_codigo(code, params.get("nivel", "intermediario")) if code else "Cole ou selecione o código que deseja explicar."
 
         if name == "revisar_codigo":
             file = _get_arquivo(params)
             code = ler_arquivo(file).data if file else _get_codigo(params)
-            return revisar_codigo(code) if code else "Cole o codigo ou informe um arquivo para revisar."
+            return revisar_codigo(code) if code else "Cole o código ou informe um arquivo para revisar."
 
         if name == "refatorar_codigo":
             code = _get_codigo(params)
-            return refatorar_codigo(code, params.get("objetivo", "")) if code else "Cole o codigo que deseja refatorar."
+            return refatorar_codigo(code, params.get("objetivo", "")) if code else "Cole o código que deseja refatorar."
 
         if name == "gerar_testes":
             target = params.get("alvo", "")
             code = ler_arquivo(target).data if target else _get_codigo(params)
-            return gerar_testes(code, params.get("framework", "pytest")) if code else "Informe o arquivo ou cole o codigo para gerar testes."
+            return gerar_testes(code, params.get("framework", "pytest")) if code else "Informe o arquivo ou cole o código para gerar testes."
 
         if name == "documentar_codigo":
             code = _get_codigo(params)
-            return documentar_codigo(code, params.get("estilo", "google")) if code else "Cole o codigo que deseja documentar."
+            return documentar_codigo(code, params.get("estilo", "google")) if code else "Cole o código que deseja documentar."
 
         if name == "corrigir_erro":
             code = _get_codigo(params)
             err = params.get("erro", "")
-            return corrigir_erro(code, err) if (code or err) else "Cole o codigo com erro e a mensagem de erro."
+            return corrigir_erro(code, err) if (code or err) else "Cole o código com erro e a mensagem de erro."
 
         if name == "converter_linguagem":
             code = _get_codigo(params)
-            return converter_linguagem(code, params.get("de", ""), params.get("para", "python")) if code else "Cole o codigo para converter."
+            return converter_linguagem(code, params.get("de", ""), params.get("para", "python")) if code else "Cole o código para converter."
 
         if name == "otimizar_performance":
             code = _get_codigo(params)
-            return otimizar_performance(code, _linguagem_atual) if code else "Cole o codigo para otimizar."
+            return otimizar_performance(code, _linguagem_atual) if code else "Cole o código para otimizar."
 
         if name == "revisar_seguranca":
             code = _get_codigo(params)
-            return revisar_seguranca(code) if code else "Cole o codigo para auditoria de seguranca."
+            return revisar_seguranca(code) if code else "Cole o código para auditoria de segurança."
 
         if name == "completar_codigo":
             code = _get_codigo(params)
-            return completar_codigo(code) if code else "Cole o codigo incompleto para completar."
+            return completar_codigo(code) if code else "Cole o código incompleto para completar."
 
         if name == "pair_program":
             return pair_program(params.get("mensagem", ""), params.get("contexto", ""), _arquivo_atual, _stack_projeto)
 
         if name == "executar_codigo":
             code = _get_codigo(params)
-            return executar_auto(code, _linguagem_atual).format() if code else "Cole o codigo para executar."
+            return executar_auto(code, _linguagem_atual).format() if code else "Cole o código para executar."
+
+        if name == "coder_save_file":
+            if _editor_bridge:
+                from app.actions.coder_actions import CoderActions
+                return CoderActions(_editor_bridge).save_current_file(params.get("arquivo", ""))
+            code = _get_codigo(params)
+            return criar_arquivo_codigo(params.get("arquivo") or "main.py", code).message if code else "Cole o codigo para salvar."
+
+        if name == "coder_new_file":
+            if _editor_bridge:
+                from app.actions.coder_actions import CoderActions
+                return CoderActions(_editor_bridge).new_file(params.get("arquivo", ""))
+            return "Abra a aba Coder para criar arquivo no editor."
+
+        if name == "coder_clear_output":
+            if _editor_bridge:
+                from app.actions.coder_actions import CoderActions
+                return CoderActions(_editor_bridge).clear_output()
+            return "Terminal limpo."
 
         if name == "terminal_exec":
             return executar(params.get("comando", ""), confirmar_callback=confirm_callback).format()
@@ -199,8 +288,8 @@ def executar_intent(intent: CodingIntent, confirm_callback: Optional[Callable] =
         if name == "salvar_snippet":
             code = _get_codigo(params)
             if not code:
-                return "Cole o codigo que deseja salvar como snippet."
-            snippet = salvar_snippet(params.get("titulo", "Snippet sem titulo"), code, _linguagem_atual)
+                return "Cole o código que deseja salvar como snippet."
+            snippet = salvar_snippet(params.get("titulo", "Snippet sem título"), code, _linguagem_atual)
             return f"Snippet salvo: [{snippet['id']}] {snippet['titulo']}"
         if name == "buscar_snippets":
             return formatar_lista(buscar_snippets(params.get("termo", "")))

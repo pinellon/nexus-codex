@@ -2,6 +2,7 @@
 
 import json
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 try:
@@ -37,6 +38,53 @@ MAX_HISTORY = 10
 SYSTEM_PROMPT = f"""Voce e o NEXUS, assistente pessoal do {NEXUS_OWNER}.
 Responda sempre em portugues do Brasil.
 Seja direto, objetivo e util. Nunca diga que executou algo se nao executou."""
+
+
+@dataclass(frozen=True)
+class Settings:
+    wake_word: str
+    language: str
+    voice_engine: str
+    continuous_mode: bool
+    workspace: Path
+    log_file: Path
+    elevenlabs_api_key: str
+    elevenlabs_voice_id: str
+    listen_timeout: int = 5
+    phrase_time_limit: int = 8
+    voice_rate: int = 180
+    voice_volume: float = 1.0
+    command_timeout_seconds: int = 20
+
+
+def _as_bool(value, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "sim", "on"}
+
+
+def load_settings() -> Settings:
+    """Compatibilidade com o launcher Voice Coder v3."""
+    try:
+        import app.settings_manager as persisted
+        saved = persisted.load()
+    except Exception:
+        saved = {}
+
+    workspace = Path(os.getenv("NEXUS_WORKSPACE", saved.get("workspace", "workspace"))).resolve()
+    workspace.mkdir(parents=True, exist_ok=True)
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+    return Settings(
+        wake_word=os.getenv("NEXUS_WAKE_WORD", saved.get("wake_word", "nexus")).strip().lower(),
+        language=os.getenv("NEXUS_LANGUAGE", saved.get("voice_language", "pt-BR")).strip(),
+        voice_engine=os.getenv("NEXUS_VOICE_ENGINE", saved.get("voice_engine", "pyttsx3")).strip().lower(),
+        continuous_mode=_as_bool(os.getenv("NEXUS_CONTINUOUS_MODE", saved.get("continuous_mode", False))),
+        workspace=workspace,
+        log_file=LOGS_DIR / "nexus.log",
+        elevenlabs_api_key=os.getenv("ELEVENLABS_API_KEY", saved.get("elevenlabs_api_key", "")).strip(),
+        elevenlabs_voice_id=os.getenv("ELEVENLABS_VOICE_ID", saved.get("elevenlabs_voice_id", "")).strip(),
+    )
 
 
 class AppConfig:

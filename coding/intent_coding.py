@@ -13,7 +13,34 @@ class CodingIntent:
 
 
 def detectar_intent_coding(texto: str) -> CodingIntent | None:
+    raw = texto.strip()
     t = texto.lower().strip()
+
+    if re.search(r"\b(?:lista?|mostra?|quais|ver)\b.*\b(?:templates?|scaffoldings?|scaffolds?)\b|\btemplates?\s+(?:disponiveis|disponiveis)\b", t):
+        return CodingIntent("listar_templates", {})
+
+    scaffold = _detect_scaffold(raw)
+    if scaffold:
+        return scaffold
+
+    if re.search(r"\b(?:contexto|snapshot|mapa)\s+(?:do\s+)?projeto\b|\bindexa\s+(?:o\s+)?projeto\b", t):
+        return CodingIntent("contexto_projeto", {})
+
+    if re.search(r"\b(?:preview|mostra|ver)\s+(?:do\s+)?patch\b|\bdiff\s+(?:do\s+)?patch\b", t):
+        return CodingIntent("preview_ai_patch", {})
+
+    if re.search(r"\b(?:aplica?|aplicar|confirma?)\s+(?:o\s+)?patch\b|\bapply\s+patch\b", t):
+        return CodingIntent("aplicar_ai_patch", {})
+
+    if re.search(r"\b(?:roda?|executa?)\s+ruff\b|\bruff\s+check\b", t):
+        return CodingIntent("run_ruff", {})
+
+    if re.search(r"\b(?:roda?|executa?)\s+pytest\b|\bpytest\b", t):
+        return CodingIntent("run_pytest", {})
+
+    workspace_patch = _detect_workspace_patch(raw)
+    if workspace_patch:
+        return workspace_patch
 
     m = re.search(r"\b(?:gera?|cria?|escreve?|faz(?:er)?|codifica?)\s+(?:um\s+|uma\s+)?(?:codigo|código|script|funcao|função|classe|componente|api|endpoint|modulo|módulo)\s*(?:(?:em\s+)?(\w+))?\s+(?:para|que|pra)\s+(.+)", t)
     if m:
@@ -60,8 +87,19 @@ def detectar_intent_coding(texto: str) -> CodingIntent | None:
     if re.search(r"\b(?:completa?|termina?|finaliza?)\b.*\b(?:codigo|código|funcao|função|classe|arquivo)\b", t):
         return CodingIntent("completar_codigo", {})
 
-    if re.search(r"\b(?:roda?|executa?|run)\b.*\b(?:codigo|código|snippet)\b", t):
+    if re.search(r"\b(?:roda?|rode|executa?|execute|run)\b.*\b(?:codigo|código|snippet)\b", t):
         return CodingIntent("executar_codigo", {})
+
+    if re.search(r"\b(?:salva?|salve|salvar)\s+(?:esse\s+|este\s+|o\s+)?arquivo\b", t):
+        match = re.search(r"(?:como|chamado|nome)\s+([\w.\-]+)", t)
+        return CodingIntent("coder_save_file", {"arquivo": match.group(1) if match else ""})
+
+    match = re.search(r"\b(?:cria?|crie|criar|novo)\s+(?:um\s+)?arquivo\s+(?:chamado\s+|nome\s+)?([\w.\-]+)", t)
+    if match:
+        return CodingIntent("coder_new_file", {"arquivo": match.group(1)})
+
+    if re.search(r"\b(?:limpa?|limpe|limpar)\s+(?:o\s+)?(?:terminal|output|saida|saída)\b", t):
+        return CodingIntent("coder_clear_output", {})
 
     if re.search(r"\bgit\s+status\b|\bstatus\s+(?:do\s+)?(?:git|repo|repositorio|repositório)\b", t):
         return CodingIntent("git_status", {})
@@ -137,3 +175,52 @@ def detectar_intent_coding(texto: str) -> CodingIntent | None:
 def _file_from_text(text: str) -> str:
     match = re.search(r"([\w.\-/\\]+\.\w+)", text)
     return match.group(1) if match else ""
+
+
+def _detect_scaffold(text: str) -> CodingIntent | None:
+    templates = (
+        r"fastapi|react|vite|express|node|nodejs|flask|cli|python-cli|lib|biblioteca|"
+        r"lib-python|django|next|nextjs|electron|discord(?:-|\s)?bot"
+    )
+    patterns = [
+        rf"\b(?:cria?r?|gera?r?|novo|nova)\s+(?:um\s+|uma\s+)?(?:projeto|project|app|api|servico|serviço)\s+({templates})(?:\s+(?:chamado|chamada|nomeado|nomeada|com\s+nome|nome)\s+|\s+)(.+)$",
+        rf"\bscaffold\s+({templates})\s+(.+)$",
+        rf"\b(?:cria?r?|gera?r?)\s+({templates})\s+(?:chamado|chamada|nomeado|nomeada|com\s+nome)?\s*(.+)$",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if not match:
+            continue
+        template = match.group(1).strip()
+        name, destino = _split_name_destino(match.group(2).strip())
+        if name:
+            return CodingIntent("criar_projeto", {"template": template, "nome": name, "destino": destino})
+    return None
+
+
+def _split_name_destino(value: str) -> tuple[str, str]:
+    value = value.strip().strip("'\"")
+    match = re.search(r"\s+(?:em|na\s+pasta|no\s+diretorio|no\s+diretório)\s+(.+)$", value, re.IGNORECASE)
+    if not match:
+        return value, ""
+    name = value[: match.start()].strip().strip("'\"")
+    destino = match.group(1).strip().strip("'\"")
+    return name, destino
+
+
+def _detect_workspace_patch(text: str) -> CodingIntent | None:
+    action_map = [
+        (r"\b(?:gera?|cria?|faz|implementa?|codifica?)\s+(?:um\s+)?patch\s+(?:para|pra|que)?\s*(.+)$", "generate"),
+        (r"\b(?:implementa?|adiciona?|cria?)\s+(?:no\s+)?projeto\s+(.+)$", "generate"),
+        (r"\b(?:corrige?|conserta?|fix)\s+(?:no\s+)?projeto\s+(.+)$", "review_bugs"),
+        (r"\b(?:refatora?)\s+(?:o\s+)?projeto\s+(.+)$", "refactor"),
+        (r"\b(?:gera?|cria?)\s+testes?\s+(?:no\s+)?projeto\s+(.+)$", "tests"),
+        (r"\b(?:documenta?)\s+(?:o\s+)?projeto\s+(.+)$", "document"),
+        (r"\b(?:audita?|seguranca|segurança)\s+(?:do\s+)?projeto\s+(.+)$", "security"),
+    ]
+    for pattern, action_id in action_map:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            request = match.group(1).strip() or text.strip()
+            return CodingIntent("workspace_ai_patch", {"acao": action_id, "pedido": request})
+    return None

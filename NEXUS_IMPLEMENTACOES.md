@@ -5,7 +5,7 @@ Este arquivo resume tudo que foi adicionado ao NEXUS.
 ## Como Rodar
 
 ```powershell
-cd C:\Users\nicol\AppData\Local\Temp
+cd C:\Users\nicol\Documents\Codex\2026-05-03\files-mentioned-by-the-user-theme\nexus-codex-push
 pip install -r requirements.txt
 python theme.py
 ```
@@ -203,6 +203,107 @@ lista os snippets
 estatisticas dos snippets
 ```
 
+## Scaffolding de Projetos
+
+O NEXUS CODER agora cria estruturas completas de projeto.
+
+Templates embutidos:
+
+- `fastapi`
+- `react`
+- `express`
+- `flask`
+- `cli`
+- `lib`
+
+Comandos:
+
+```text
+lista templates
+cria projeto fastapi chamado minha-api
+cria projeto react chamado dashboard em C:\Projetos
+cria projeto express chamado backend
+cria projeto lib chamado toolkit
+```
+
+Arquivo principal:
+
+```text
+coding/scaffolder.py
+```
+
+## Copiloto Local com Patch
+
+O NEXUS CODER tambem ganhou fluxo de patch revisavel:
+
+- monta contexto do projeto ativo;
+- pede para a IA devolver JSON estruturado;
+- mostra preview em formato diff;
+- aplica o patch somente dentro do projeto ativo;
+- cria backup dos arquivos existentes antes de sobrescrever.
+
+Comandos:
+
+```text
+contexto do projeto
+gera patch para adicionar endpoint health
+preview patch
+aplicar patch
+roda ruff
+roda pytest
+```
+
+Arquivos principais:
+
+```text
+coding/project_context.py
+coding/patcher.py
+coding/workspace_ai.py
+```
+
+## Assistente Operacional
+
+O NEXUS agora tem uma camada operacional unica para texto, voz e botoes:
+
+- `VoiceLoop` escuta em thread separada;
+- `CommandRouter` mostra o que foi entendido;
+- `SafetyManager` centraliza confirmacoes;
+- `EditorBridge` conecta voz/botoes ao editor visual;
+- a tela registra "Ouvi", "Entendi" e executa pela mesma pipeline.
+
+Comandos de voz/texto:
+
+```text
+Nexus, abrir Chrome
+Nexus, status do PC
+Nexus, rode esse codigo
+Nexus, salve esse arquivo como main.py
+Nexus, crie um arquivo chamado app.py
+Nexus, limpe o terminal
+```
+
+Arquivos principais:
+
+```text
+app/core/command_router.py
+app/core/safety.py
+app/voice/voice_loop.py
+app/coder/editor_bridge.py
+app/actions/coder_actions.py
+```
+
+## Checklist v3
+
+- [x] Estrutura operacional integrada ao projeto atual.
+- [x] `main.py`, `install.bat`, `run.bat` e `.env.example`.
+- [x] `load_settings()` compativel em `app/config.py`.
+- [x] Testes de roteamento em `tests/test_router.py`.
+- [x] Exemplo Tkinter em `examples/ui_integration_tkinter.py`.
+- [x] Botao Voz ON/OFF.
+- [x] EditorBridge integrado na aba Coder.
+- [x] Logs em `data/logs/nexus.log`.
+- [x] Base de plugins em `app/plugins`.
+
 ## Memoria Obsidian
 
 O NEXUS foi conectado ao Obsidian como memoria de longo prazo.
@@ -268,4 +369,3 @@ README.md
 - Memoria Obsidian conectada.
 - Vault detectado com notas Markdown.
 - Respostas novas podem ser registradas automaticamente no Obsidian.
-

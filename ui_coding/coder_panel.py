@@ -22,6 +22,7 @@ class CoderPanel(tk.Frame):
         self._on_command = on_command
         self._linguagem_var = tk.StringVar(value="python")
         self._projeto_var = tk.StringVar(value="(nenhum projeto)")
+        self._filename_var = tk.StringVar(value="main.py")
         self._build()
 
     def _build(self):
@@ -44,6 +45,7 @@ class CoderPanel(tk.Frame):
         scan.place(x=0, y=0, relwidth=1, relheight=1)
         scan.start()
         tk.Label(hdr, text="EDITOR", bg=C["card"], fg=C["cyan"], font=F["small"]).pack(side="left", padx=10, pady=6)
+        tk.Label(hdr, textvariable=self._filename_var, bg=C["card"], fg=C["text_muted"], font=F["tiny"]).pack(side="left", padx=(0, 8))
         langs = ["python", "javascript", "typescript", "html", "css", "sql", "bash", "java", "c", "cpp", "go", "rust", "php"]
         ctk.CTkOptionMenu(
             hdr,
@@ -140,6 +142,14 @@ class CoderPanel(tk.Frame):
         btn("Instalar pacote", self._prompt_instalar)
         btn("Verificar ambiente", lambda: self._cmd("verifica o ambiente"))
         btn("Historico terminal", lambda: self._cmd("historico de terminal"))
+        btn("Rodar ruff", lambda: self._cmd("roda ruff"))
+        btn("Rodar pytest", lambda: self._cmd("roda pytest"))
+
+        section("COPILOTO LOCAL")
+        btn("Contexto projeto", lambda: self._cmd("contexto do projeto"))
+        btn("Gerar patch IA", self._prompt_ai_patch, "success")
+        btn("Preview patch", lambda: self._cmd("preview patch"))
+        btn("Aplicar patch", lambda: self._cmd("aplicar patch"), "danger")
 
         section("GIT")
         btn("Status", lambda: self._cmd("git status"))
@@ -156,6 +166,13 @@ class CoderPanel(tk.Frame):
         btn("Estrutura", lambda: self._cmd("mostra a estrutura do projeto"))
         btn("Linhas de codigo", lambda: self._cmd("conta linhas"))
         btn("Buscar no codigo", self._prompt_buscar)
+
+        section("SCAFFOLD")
+        btn("Listar templates", lambda: self._cmd("lista templates"))
+        btn("Criar projeto", self._prompt_scaffold, "success")
+        btn("FastAPI rapido", lambda: self._prompt_scaffold("fastapi"))
+        btn("React rapido", lambda: self._prompt_scaffold("react"))
+        btn("Express rapido", lambda: self._prompt_scaffold("express"))
 
         section("SNIPPETS")
         btn("Salvar snippet", self._prompt_salvar_snippet)
@@ -266,6 +283,7 @@ class CoderPanel(tk.Frame):
         if path:
             from pathlib import Path
             Path(path).write_text(code, encoding="utf-8")
+            self._filename_var.set(Path(path).name)
             show_toast(self.winfo_toplevel(), f"Salvo: {Path(path).name}", "success")
 
     def _copiar_output(self):
@@ -302,6 +320,23 @@ class CoderPanel(tk.Frame):
             self._cmd(f"define o projeto em {path}")
             self._projeto_var.set(path)
 
+    def _prompt_scaffold(self, template: str = ""):
+        if template:
+            dialog = ctk.CTkInputDialog(text=f"Nome do projeto {template}:", title="Criar projeto")
+            name = dialog.get_input()
+            if name:
+                self._cmd(f"cria projeto {template} chamado {name}")
+            return
+        dialog = ctk.CTkInputDialog(text="Template e nome. Ex: fastapi minha-api", title="Criar projeto")
+        text = dialog.get_input()
+        if not text:
+            return
+        parts = text.strip().split(maxsplit=1)
+        if len(parts) == 1:
+            self._cmd(f"cria projeto {parts[0]} chamado app-nexus")
+        else:
+            self._cmd(f"cria projeto {parts[0]} chamado {parts[1]}")
+
     def _prompt_salvar_snippet(self):
         if not self.get_codigo().strip():
             show_toast(self.winfo_toplevel(), "Editor vazio.", "warning")
@@ -322,6 +357,12 @@ class CoderPanel(tk.Frame):
         text = dialog.get_input()
         if text:
             self._cmd_com_codigo(f"converte {text}")
+
+    def _prompt_ai_patch(self):
+        dialog = ctk.CTkInputDialog(text="O que implementar/corrigir no projeto ativo?", title="Patch com IA")
+        text = dialog.get_input()
+        if text:
+            self._cmd(f"gera patch para {text}")
 
     def _focus_command(self, _event):
         if self._cmd_input.get().startswith("  Ex:"):
@@ -364,3 +405,25 @@ class CoderPanel(tk.Frame):
 
     def get_codigo(self) -> str:
         return self._editor.get("1.0", "end-1c")
+
+    def set_output(self, text: str):
+        self._limpar_output()
+        self._write_output(text or "", "comment")
+
+    def get_filename(self) -> str:
+        return self._filename_var.get()
+
+    def set_filename(self, filename: str):
+        self._filename_var.set(filename or "main.py")
+
+    def build_editor_bridge(self):
+        from app.coder.editor_bridge import EditorBridge
+
+        return EditorBridge(
+            get_code=self.get_codigo,
+            set_code=lambda text: self.set_codigo(text, self._linguagem_var.get()),
+            get_filename=self.get_filename,
+            set_filename=self.set_filename,
+            set_output=self.set_output,
+            clear_output=self._limpar_output,
+        )

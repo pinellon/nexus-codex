@@ -1,14 +1,19 @@
-"""Entrada de voz opcional por microfone."""
+"""Entrada de voz opcional por microfone, agora com backends plugáveis."""
+
+from __future__ import annotations
+
+from app.settings_manager import load as load_settings
+from app.voice.manager import listen_text
 
 
-def ouvir_microfone() -> str:
+def ouvir_microfone(
+    settings: dict | None = None,
+    backend: str | None = None,
+    timeout: int = 5,
+    phrase_time_limit: int = 10,
+) -> str:
     try:
-        import speech_recognition as sr
-        recognizer = sr.Recognizer()
-        with sr.Microphone() as source:
-            recognizer.adjust_for_ambient_noise(source, duration=0.5)
-            audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
-        return recognizer.recognize_google(audio, language="pt-BR")
+        cfg = settings or load_settings()
+        return listen_text(settings=cfg, backend=backend, timeout=timeout, phrase_time_limit=phrase_time_limit)
     except Exception as error:
         raise RuntimeError(f"Não consegui ouvir o microfone: {error}") from error
-

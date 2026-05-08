@@ -1,20 +1,24 @@
-"""Terminal inteligente com aliases e historico."""
+"""Terminal mais seguro: reduz shell=True e centraliza política de risco."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+import os
+import shlex
 import shutil
 import subprocess
 import time
 
+from app.action_policy import assess_terminal_command
 from coding.file_manager import get_projeto
 
 try:
     from app.logger import log_action
 except ImportError:
-    def log_action(text: str): print(text)
+    def log_action(text: str):  # type: ignore[override]
+        print(text)
 
 
 ALIASES = {
@@ -33,12 +37,13 @@ ALIASES = {
     "gd": "git diff --stat",
     "ll": "dir",
     "pwd": "cd",
-    "which": "where",
+    "which": "where" if os.name == "nt" else "which",
 }
 
-REQUIRES_CONFIRM = {"rmdir", "del ", "rd /s", "format", "shutdown", "taskkill /f", "rm -r", "drop table", "drop database"}
-_history: list[dict] = []
+_HISTORY: list[dict] = []
 MAX_HISTORY = 100
+_WINDOWS_BUILTINS = {"dir", "copy", "del", "erase", "type", "cls", "echo", "cd", "md", "mkdir", "rd", "rmdir", "ren", "move", "set", "start"}
+_SHELL_OPERATORS = ["&&", "||", "|", ">", "<"]
 
 
 @dataclass
@@ -57,36 +62,80 @@ class TermResult:
         return "\n".join(parts)
 
 
-def executar(comando: str, cwd: str = "", timeout: int = 60, confirmar_callback=None) -> TermResult:
-    cmd_lower = comando.lower()
-    for danger in REQUIRES_CONFIRM:
-        if danger in cmd_lower:
-            if confirmar_callback and confirmar_callback(f"Comando perigoso: '{comando}'. Confirmar?"):
-                break
-            return TermResult(False, f"Comando bloqueado: {danger}", comando)
-    parts = comando.strip().split(maxsplit=1)
+def _add_history(cmd: str, success: bool, output: str):
+    _HISTORY.append({"cmd": cmd, "success": success, "output": output, "time": datetime.now().strftime("%H:%M:%S")})
+    if len(_HISTORY) > MAX_HISTORY:
+        _HISTORY.pop(0)
+
+
+def _expand_alias(command: str) -> str:
+    parts = command.strip().split(maxsplit=1)
     if parts and parts[0] in ALIASES:
-        comando_final = ALIASES[parts[0]] + (f" {parts[1]}" if len(parts) > 1 else "")
-    else:
-        comando_final = comando
+        return ALIASES[parts[0]] + (f" {parts[1]}" if len(parts) > 1 else "")
+    return command
+
+
+def _needs_shell(command: str) -> bool:
+    lower = command.lower().strip()
+    if any(token in command for token in _SHELL_OPERATORS):
+        return True
+    first = lower.split(maxsplit=1)[0] if lower else ""
+    return os.name == "nt" and first in _WINDOWS_BUILTINS
+
+
+def _build_command(command: str) -> list[str]:
+    if _needs_shell(command):
+        if os.name == "nt":
+            return ["cmd", "/c", command]
+        return ["bash", "-lc", command]
+    return shlex.split(command, posix=(os.name != "nt"))
+
+
+def executar(comando: str, cwd: str = "", timeout: int = 60, confirmar_callback=None) -> TermResult:
+    comando = (comando or "").strip()
+    if not comando:
+        return TermResult(False, "Comando vazio.", comando)
+
+    comando_final = _expand_alias(comando)
+    decision = assess_terminal_command(comando_final)
+    if not decision.allowed:
+        return TermResult(False, f"Comando bloqueado: {decision.reason}", comando)
+    if decision.requires_confirmation:
+        confirmado = confirmar_callback(decision.message) if confirmar_callback else False
+        if not confirmado:
+            return TermResult(False, "Ação cancelada pelo usuário.", comando)
+
     work_dir = cwd or str(get_projeto() or Path.home())
     start = time.time()
     try:
-        proc = subprocess.run(comando_final, shell=True, capture_output=True, text=True, timeout=timeout, cwd=work_dir, errors="replace")
-        result = TermResult(proc.returncode == 0, proc.stdout + proc.stderr, comando, time.time() - start, work_dir)
+        argv = _build_command(comando_final)
+        proc = subprocess.run(
+            argv,
+            shell=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=work_dir,
+            errors="replace",
+        )
+        result = TermResult(proc.returncode == 0, (proc.stdout or "") + (proc.stderr or ""), comando, time.time() - start, work_dir)
         _add_history(comando, result.success, result.output[:200])
-        log_action(f"Terminal: {comando}")
+        log_action(f"Terminal: {comando_final}")
         return result
     except subprocess.TimeoutExpired:
-        return TermResult(False, f"Timeout apos {timeout}s", comando)
+        return TermResult(False, f"Timeout após {timeout}s", comando)
+    except ValueError as error:
+        return TermResult(False, f"Não consegui interpretar o comando: {error}", comando)
+    except FileNotFoundError:
+        return TermResult(False, "Executável não encontrado no PATH.", comando)
     except Exception as error:
         return TermResult(False, str(error), comando)
 
 
-def executar_multiplos(comandos: list[str], cwd: str = "") -> list[TermResult]:
+def executar_multiplos(comandos: list[str], cwd: str = "", confirmar_callback=None) -> list[TermResult]:
     results = []
     for command in comandos:
-        result = executar(command, cwd=cwd)
+        result = executar(command, cwd=cwd, confirmar_callback=confirmar_callback)
         results.append(result)
         if not result.success:
             break
@@ -95,6 +144,7 @@ def executar_multiplos(comandos: list[str], cwd: str = "") -> list[TermResult]:
 
 def sugerir_correcao(comando: str, erro: str) -> str:
     from coding.code_assistant import _call_ai
+
     return _call_ai(
         f"""Um comando falhou.
 COMANDO: {comando}
@@ -114,17 +164,11 @@ def listar_aliases() -> str:
     return "Aliases:\n" + "\n".join(f"{name:12s} -> {cmd}" for name, cmd in sorted(ALIASES.items()))
 
 
-def _add_history(cmd: str, success: bool, output: str):
-    _history.append({"cmd": cmd, "success": success, "output": output, "time": datetime.now().strftime("%H:%M:%S")})
-    if len(_history) > MAX_HISTORY:
-        _history.pop(0)
-
-
 def get_history(n: int = 20) -> str:
-    if not _history:
+    if not _HISTORY:
         return "Nenhum comando executado ainda."
-    lines = [f"Ultimos {min(n, len(_history))} comandos:"]
-    for item in _history[-n:]:
+    lines = [f"Últimos {min(n, len(_HISTORY))} comandos:"]
+    for item in _HISTORY[-n:]:
         lines.append(f"{item['time']} {'OK' if item['success'] else 'ERRO'} {item['cmd']}")
     return "\n".join(lines)
 
@@ -145,12 +189,11 @@ def verificar_ambiente() -> str:
     for name, cmd in tools:
         if shutil.which(cmd[0]):
             try:
-                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                proc = subprocess.run(cmd, shell=False, capture_output=True, text=True, timeout=5)
                 version = (proc.stdout or proc.stderr).strip().splitlines()[0]
                 lines.append(f"OK   {name:12s} {version}")
             except Exception:
                 lines.append(f"OK   {name:12s} instalado")
         else:
-            lines.append(f"MISS {name:12s} nao encontrado")
+            lines.append(f"MISS {name:12s} não encontrado")
     return "\n".join(lines)
-

@@ -1,10 +1,8 @@
-"""
-app/voice.py
-Voz do Nexus com ElevenLabs + fallback para voz do sistema.
-"""
+"""Motor de voz do NEXUS com suporte a pyttsx3, edge-tts e ElevenLabs."""
 
 from __future__ import annotations
 
+import asyncio
 import os
 import tempfile
 import time
@@ -21,21 +19,23 @@ load_dotenv()
 
 
 class VoiceEngine:
-    def __init__(self):
-        self.enabled = bool(config.get("voice.enabled", True))
-        self.provider = config.get("voice.provider", "system")
+    def __init__(self, engine: str | None = None, settings: dict | None = None):
+        self.settings = settings or load_settings()
+        self.enabled = bool(self.settings.get("speak_responses", config.get("voice.enabled", True)))
+        self.provider = (engine or self.settings.get("voice_engine") or config.get("voice.provider", "pyttsx3")).strip().lower()
         self.system_engine = None
         self.pygame_ready = False
 
-        if self.provider == "system":
+        if self.provider in {"system", "pyttsx3", "pytts"}:
             self.init_system_voice()
 
-        if self.provider == "elevenlabs":
+        if self.provider in {"edge-tts", "edge_tts", "edge", "elevenlabs"}:
             self.init_audio_player()
 
     def init_audio_player(self):
         try:
             import pygame
+
             if not pygame.mixer.get_init():
                 pygame.mixer.init()
             self.pygame_ready = True
@@ -62,6 +62,13 @@ class VoiceEngine:
                 logger.exception(f"ELEVENLABS_VOICE_ERROR | error={_friendly_elevenlabs_error(error)}")
                 return self.speak_system(text)
 
+        if self.provider in {"edge-tts", "edge_tts", "edge"}:
+            try:
+                return self.speak_edge_tts(text)
+            except Exception as error:
+                logger.exception(f"EDGE_TTS_VOICE_ERROR | error={error}")
+                return self.speak_system(text)
+
         return self.speak_system(text)
 
     def speak_system(self, text: str):
@@ -74,6 +81,41 @@ class VoiceEngine:
             self.system_engine.runAndWait()
         except Exception as error:
             logger.exception(f"SYSTEM_VOICE_ERROR | error={error}")
+
+    def speak_edge_tts(self, text: str):
+        voice_name = self.settings.get("edge_tts_voice", "pt-BR-AntonioNeural")
+        if not self.pygame_ready:
+            self.init_audio_player()
+        if not self.pygame_ready:
+            raise RuntimeError("Player de audio nao inicializado.")
+
+        audio_path = None
+        try:
+            import edge_tts
+            import pygame
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as file:
+                audio_path = file.name
+
+            async def _generate():
+                communicate = edge_tts.Communicate(text, voice=voice_name)
+                await communicate.save(audio_path)
+
+            asyncio.run(_generate())
+            if self.pygame_ready:
+                pygame.mixer.music.load(audio_path)
+                pygame.mixer.music.play()
+                while pygame.mixer.music.get_busy():
+                    time.sleep(0.05)
+            else:
+                os.startfile(audio_path)
+                time.sleep(1.0)
+        finally:
+            if audio_path and os.path.exists(audio_path):
+                try:
+                    os.remove(audio_path)
+                except Exception:
+                    pass
 
     def speak_elevenlabs(self, text: str):
         saved = load_settings()
@@ -128,6 +170,7 @@ class VoiceEngine:
         audio_path = None
         try:
             import pygame
+
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as file:
                 file.write(response.content)
                 audio_path = file.name

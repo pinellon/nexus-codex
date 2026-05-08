@@ -6,13 +6,15 @@ import datetime as _dt
 import os
 import threading
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
 from app.command_history import history as cmd_history
+from app.core.command_router import CommandRouter
 from app.error_handler import handle_error
-from app.logger import get_recent_logs, log_command
+from app.logger import get_recent_logs
 from app.memory import clear_memory
 import app.settings_manager as settings
 from ui.theme import BTN, C, F
@@ -31,6 +33,9 @@ class NexusApp(ctk.CTk):
         self._message_count = 0
         self._command_count = 0
         self._last_metrics = {"cpu": 0.0, "ram": 0.0, "disk": 0.0}
+        self._router = CommandRouter(self._cfg.get("wake_word", "nexus"))
+        self._voice_loop = None
+        self._voice_loop_active = False
         SoundBus.enabled = bool(self._cfg.get("ui_sounds", True))
 
         self._setup_window()
@@ -43,6 +48,8 @@ class NexusApp(ctk.CTk):
         self.minsize(900, 620)
         self.configure(fg_color=C["bg"])
         self.resizable(True, True)
+        self._set_windows_app_id()
+        self._apply_window_icon()
         self.attributes("-topmost", bool(self._cfg.get("always_on_top")))
         self.bind("<Control-k>", lambda _e: self._focus_input())
         self.bind("<Control-l>", lambda _e: self._clear_chat())
@@ -51,6 +58,43 @@ class NexusApp(ctk.CTk):
         self.bind("<Control-3>", lambda _e: self._switch_tab("coder"))
         self.bind("<Control-4>", lambda _e: self._switch_tab("config"))
         self.bind("<Control-5>", lambda _e: self._switch_tab("logs"))
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _set_windows_app_id(self):
+        if os.name != "nt":
+            return
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("nicolas.nexus.desktop")
+        except Exception:
+            pass
+
+    def _apply_window_icon(self):
+        assets = Path(__file__).resolve().parents[1] / "assets"
+        png = assets / "nexus_logo_64.png"
+        ico = assets / "nexus_logo.ico"
+
+        try:
+            if ico.exists():
+                self.iconbitmap(default=str(ico))
+        except tk.TclError:
+            pass
+
+        try:
+            if png.exists():
+                self._window_icon = tk.PhotoImage(file=str(png))
+                self.iconphoto(True, self._window_icon)
+        except tk.TclError:
+            pass
+
+    def _load_header_logo(self):
+        logo = Path(__file__).resolve().parents[1] / "assets" / "nexus_logo_32.png"
+        if not logo.exists():
+            return None
+        try:
+            return tk.PhotoImage(file=str(logo))
+        except tk.TclError:
+            return None
 
     def _build_layout(self):
         self._build_header()
@@ -79,7 +123,12 @@ class NexusApp(ctk.CTk):
             self._header_scan.start()
         tk.Frame(hdr, bg=C["cyan"], height=1).place(relx=0, rely=1, relwidth=1, anchor="sw")
 
-        tk.Label(hdr, text="◈ NEXUS", bg=C["panel"], fg=C["cyan"], font=("Consolas", 22, "bold")).pack(side="left", padx=18)
+        self._header_logo_img = self._load_header_logo()
+        if self._header_logo_img:
+            tk.Label(hdr, image=self._header_logo_img, bg=C["panel"]).pack(side="left", padx=(18, 8))
+            tk.Label(hdr, text="NEXUS", bg=C["panel"], fg=C["cyan"], font=("Consolas", 22, "bold")).pack(side="left", padx=(0, 18))
+        else:
+            tk.Label(hdr, text="NEXUS", bg=C["panel"], fg=C["cyan"], font=("Consolas", 22, "bold")).pack(side="left", padx=18)
         self._subtitle_var = tk.StringVar(value="// SISTEMA ATIVO")
         tk.Label(hdr, textvariable=self._subtitle_var, bg=C["panel"], fg=C["text_muted"], font=F["tiny"]).pack(side="left")
         self._ticker = StatusTicker(
@@ -156,10 +205,16 @@ class NexusApp(ctk.CTk):
             self.after(40, self._focus_input)
 
     def _build_coder_tab(self) -> tk.Frame:
-        return CoderPanel(
+        self._coder_panel = CoderPanel(
             self._content_host,
             on_command=lambda cmd: self._on_command(cmd, self._confirm_callback),
         )
+        try:
+            from coding.dispatcher import set_editor_bridge
+            set_editor_bridge(self._coder_panel.build_editor_bridge())
+        except Exception:
+            pass
+        return self._coder_panel
 
     def _build_chat_tab(self) -> tk.Frame:
         frame = tk.Frame(self._content_host, bg=C["bg"])
@@ -184,6 +239,8 @@ class NexusApp(ctk.CTk):
         self._send_btn.pack(side="left", padx=(0, 5))
         self._mic_btn = self._btn(row, "🎙", self._toggle_mic, "secondary", w=42, h=36)
         self._mic_btn.pack(side="left", padx=(0, 5))
+        self._voice_loop_btn = self._btn(row, "Voz OFF", self._toggle_voice_loop, "ghost", w=82, h=36)
+        self._voice_loop_btn.pack(side="left", padx=(0, 5))
         self._btn(row, "🧠", self._limpar_memoria, "ghost", w=42, h=36).pack(side="left", padx=(0, 5))
         self._btn(row, "🗑", self._clear_chat, "ghost", w=42, h=36).pack(side="left")
         tk.Label(wrap, text="↑/↓ histórico · Ctrl+K focar · Ctrl+L limpar · Ctrl+1..5 abas", bg=C["panel"], fg=C["text_muted"], font=F["tiny"]).pack(pady=(0, 5))
@@ -261,6 +318,8 @@ class NexusApp(ctk.CTk):
             ("🌐 Navegadores", "secondary", [("Chrome", "abre o Chrome"), ("Edge", "abre o Edge"), ("YouTube", "abre o YouTube"), ("Google", "pesquisa no google")]),
             ("🎵 Mídia", "secondary", [("Spotify", "abre o Spotify"), ("Tocar no YouTube", "toca música no youtube"), ("Tocar no Spotify", "toca música no spotify")]),
             ("📁 Arquivos", "secondary", [("Downloads", "abre meus downloads"), ("Área de trabalho", "abre a área de trabalho"), ("Bloco de Notas", "abre o bloco de notas"), ("Calculadora", "abre a calculadora")]),
+            ("🪟 Desktop", "secondary", [("Listar janelas", "listar janelas"), ("Screenshot", "tirar screenshot"), ("Clipboard", "ler clipboard"), ("Limpar clipboard", "limpar clipboard"), ("Docs", "abrir pasta documentos")]),
+            ("🧭 Apps", "secondary", [("Listar apps", "listar apps")]),
             ("⚙ Sistema", "success", [("Status PC", "mostra o status do PC"), ("Print", "tira print"), ("Data/Hora", "que horas são"), ("Bloquear", "bloquear tela")]),
             ("🔊 Volume", "ghost", [("Aumentar", "aumenta o volume"), ("Diminuir", "diminui o volume"), ("Mutar", "muta o som")]),
             ("⚠ Crítico", "danger", [("Reiniciar", "reinicia o computador"), ("Desligar", "desliga o computador")]),
@@ -360,6 +419,17 @@ class NexusApp(ctk.CTk):
         r = row("Responder por voz")
         self._voice_var = tk.BooleanVar(value=bool(cfg.get("speak_responses", True)))
         tk.Checkbutton(r, variable=self._voice_var, bg=C["card"], selectcolor=C["cyan_bg"], activebackground=C["card"], bd=0).pack(side="left", padx=10)
+        r = row("Backend de voz")
+        self._voice_backend_var = tk.StringVar(value=cfg.get("voice_backend", "auto"))
+        for value, label in [("auto", "Auto"), ("sounddevice", "SoundDevice"), ("google", "Google"), ("vosk", "Vosk")]:
+            tk.Radiobutton(r, text=label, variable=self._voice_backend_var, value=value, bg=C["card"], fg=C["text_dim"], selectcolor=C["card"], activebackground=C["card"], font=F["small"]).pack(side="left", padx=8)
+        r = row("Microfone")
+        self._voice_input_device_var = tk.StringVar(value=str(cfg.get("voice_input_device", "")))
+        tk.Entry(r, textvariable=self._voice_input_device_var, bg=C["border"], fg=C["text"], insertbackground=C["cyan"], relief="flat", font=F["small"], width=8).pack(side="left", padx=4, ipady=6)
+        tk.Label(r, text="índice do dispositivo de entrada", bg=C["card"], fg=C["text_dim"], font=F["small"]).pack(side="left", padx=8)
+        r = row("Wake word")
+        self._wake_word_var = tk.StringVar(value=cfg.get("wake_word", "nexus"))
+        tk.Entry(r, textvariable=self._wake_word_var, bg=C["border"], fg=C["text"], insertbackground=C["cyan"], relief="flat", font=F["small"]).pack(side="left", fill="x", expand=True, padx=4, ipady=6)
         r = row("Motor TTS")
         self._engine_var = tk.StringVar(value=cfg.get("voice_engine", "pyttsx3"))
         for value, label in [("pyttsx3", "pyttsx3 offline"), ("edge-tts", "edge-tts online"), ("elevenlabs", "ElevenLabs")]:
@@ -409,6 +479,9 @@ class NexusApp(ctk.CTk):
             "obsidian_memory_folder": self._obsidian_folder_var.get().strip() or "NEXUS/Memory Inbox",
             "obsidian_auto_register": self._obsidian_register_var.get(),
             "speak_responses": self._voice_var.get(),
+            "voice_backend": self._voice_backend_var.get(),
+            "voice_input_device": self._voice_input_device_var.get().strip(),
+            "wake_word": self._wake_word_var.get().strip().lower() or "nexus",
             "voice_engine": self._engine_var.get(),
             "elevenlabs_api_key": self._eleven_key_var.get().strip(),
             "elevenlabs_voice_id": self._eleven_voice_var.get().strip(),
@@ -420,6 +493,7 @@ class NexusApp(ctk.CTk):
             "ui_animations": self._animations_var.get(),
         })
         self._cfg = cfg
+        self._router = CommandRouter(cfg.get("wake_word", "nexus"))
         SoundBus.enabled = bool(cfg.get("ui_sounds", True))
         os.environ["OPENAI_API_KEY"] = cfg.get("openai_api_key", "")
         try:
@@ -516,16 +590,21 @@ class NexusApp(ctk.CTk):
             show_toast(self, "Aguarde o comando atual terminar.", "warning")
             return
         self._processing = True
+        self._sync_coder_context()
+        understood = self._router.describe(text)
         SoundBus.play("start")
         self._command_count += 1
         self._add_chat_message("user", text)
-        log_command(text)
+        self._add_system_msg(f"Ouvi: {text}")
+        self._add_system_msg(f"Entendi: {understood}")
         self._set_status("PROCESSANDO", C["warning"])
         self._send_btn.configure(state="disabled")
         self._switch_tab("chat")
 
         def worker():
             try:
+                from app.logger import log_action
+                log_action(f"Executando: {understood}")
                 result = self._on_command(text, self._confirm_callback)
                 self.after(0, lambda: self._show_response(result))
             except Exception as error:
@@ -557,7 +636,8 @@ class NexusApp(ctk.CTk):
         if not error and self._cfg.get("speak_responses", True):
             try:
                 from app.voice_output import falar
-                falar(text, engine=self._cfg.get("voice_engine", "pyttsx3"), settings=self._cfg)
+                spoken = text if len(text) <= 500 else text[:500] + "... resposta longa exibida na tela."
+                falar(spoken, engine=self._cfg.get("voice_engine", "pyttsx3"), settings=self._cfg)
             except Exception:
                 pass
 
@@ -572,13 +652,58 @@ class NexusApp(ctk.CTk):
         self._set_status("OUVINDO", C["error"])
         threading.Thread(target=self._listen_thread, daemon=True).start()
 
+    def _toggle_voice_loop(self):
+        if self._voice_loop_active:
+            self._voice_loop_active = False
+            if self._voice_loop:
+                self._voice_loop.stop()
+            self._voice_loop_btn.configure(text="Voz OFF", **BTN["ghost"])
+            self._set_status("PRONTO", C["green"])
+            self._update_footer_text()
+            show_toast(self, "Voz continua desativada.", "info")
+            return
+
+        from app.voice.voice_loop import VoiceLoop
+
+        self._voice_loop_active = True
+        self._voice_loop_btn.configure(text="Voz ON", **BTN["success"])
+        self._set_status("OUVINDO", C["error"])
+        cfg = dict(self._cfg)
+        cfg.setdefault("wake_word", "nexus")
+        self._voice_loop = VoiceLoop(
+            command_callback=lambda text: self.after(0, lambda t=text: self._run_command(t)),
+            event_callback=lambda kind, message: self.after(0, lambda k=kind, m=message: self._voice_event(k, m)),
+            settings=cfg,
+        )
+        self._voice_loop.start()
+        self._update_footer_text()
+        show_toast(self, "Voz continua ativada.", "success")
+
+    def _voice_event(self, kind: str, message: str):
+        if kind in {"heard", "understood", "voice"}:
+            self._add_system_msg(f"{kind.upper()}: {message}")
+        elif kind == "error":
+            self._add_chat_message("assistant", message)
+
+    def _sync_coder_context(self):
+        panel = getattr(self, "_coder_panel", None)
+        if not panel:
+            return
+        try:
+            from coding.dispatcher import set_contexto, set_editor_bridge
+            set_contexto(codigo=panel.get_codigo().strip(), linguagem=panel._linguagem_var.get())
+            set_editor_bridge(panel.build_editor_bridge())
+        except Exception:
+            pass
+
     def _listen_thread(self):
         try:
             from app.voice_input import ouvir_microfone
             text = ouvir_microfone()
             self.after(0, lambda: self._on_mic_done(text))
         except Exception as error:
-            self.after(0, lambda: self._on_mic_error(handle_error(error)))
+            msg = handle_error(error)
+            self.after(0, lambda msg=msg: self._on_mic_error(msg))
 
     def _on_mic_done(self, text: str):
         self._reset_mic()
@@ -687,9 +812,18 @@ class NexusApp(ctk.CTk):
         if not hasattr(self, "_footer_left"):
             return
         owner = self._cfg.get("owner_name", "Nicolas")
-        self._footer_left.set(f"NEXUS v2.1 · {owner} · mensagens {self._message_count} · comandos {self._command_count}")
+        voice = "voz ON" if self._voice_loop_active else "voz OFF"
+        self._footer_left.set(f"NEXUS v2.1 · {owner} · {voice} · mensagens {self._message_count} · comandos {self._command_count}")
         m = self._last_metrics
         self._footer_right.set(f"CPU {m['cpu']:.0f}% · RAM {m['ram']:.0f}% · DISCO {m['disk']:.0f}% · atualiza 2s")
+
+    def _on_close(self):
+        try:
+            if self._voice_loop:
+                self._voice_loop.stop()
+        except Exception:
+            pass
+        self.destroy()
 
     def run(self):
         self.mainloop()
