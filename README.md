@@ -1,6 +1,8 @@
-# NEXUS Desktop
+# NEXUS Desktop / NEXUS Codex
 
-Interface desktop em CustomTkinter com:
+Interface desktop em CustomTkinter com foco em produtividade, automacao, voz e programacao assistida.
+
+## Recursos atuais
 
 - Chat com timestamps, copiar mensagem e historico por setas.
 - 4 abas: Chat, Automacao, Configuracoes e Logs.
@@ -16,12 +18,53 @@ Interface desktop em CustomTkinter com:
 - Memoria Obsidian: consulta o vault antes da IA e registra respostas novas em Markdown.
 - Atalhos `Ctrl+1..4`, `Ctrl+K` para focar input e `Ctrl+L` para limpar chat.
 
+## Novidades adicionadas
+
+- Wake word configuravel com `voice_require_wake_word`.
+- Timeout de escuta configuravel por `voice_listen_timeout`.
+- Limite de frase configuravel por `voice_phrase_time_limit`.
+- Cache de backend de voz para melhorar estabilidade.
+- Modo descanso por voz: `Nexus, parar`.
+- Reativacao por voz: `Nexus, acordar`.
+- Templates de automacao em `app/features/command_templates.py`.
+- Sugestoes de comando em `app/features/command_suggestions.py`.
+- Gravador de sessao em `app/features/session_recorder.py`.
+- Diagnostico de saude do projeto em `app/features/project_health.py`.
+
 ## Rodar
 
 ```powershell
-cd C:\Users\nicol\Documents\Codex\2026-05-03\files-mentioned-by-the-user-theme\nexus-codex-push
 pip install -r requirements.txt
-python theme.py
+python main.py
+```
+
+Modo demo de voz:
+
+```powershell
+python main.py --voice-demo
+```
+
+## Comandos de voz uteis
+
+```text
+Nexus, abrir Chrome
+Nexus, abrir Spotify
+Nexus, abrir VS Code
+Nexus, status do PC
+Nexus, pesquisar Python no Google
+Nexus, tirar print
+Nexus, modo foco
+Nexus, modo aula
+Nexus, modo apresentacao
+Nexus, diagnostico rapido
+Nexus, diagnostico do projeto
+Nexus, ultimos eventos
+Nexus, rode esse codigo
+Nexus, explique esse codigo
+Nexus, corrija esse codigo
+Nexus, documente esse codigo
+Nexus, parar
+Nexus, acordar
 ```
 
 ## Arquivos principais
@@ -40,6 +83,15 @@ python theme.py
 - `app/core/safety.py`: confirma comandos de risco antes da execucao.
 - `app/voice/voice_loop.py`: escuta continua em thread separada.
 - `app/coder/editor_bridge.py`: ponte entre voz, botoes e editor.
+- `app/features/`: recursos extras como modos inteligentes, diagnostico e memoria de sessao.
 - `app/plugins/`: base para comandos externos sem mexer no nucleo.
 - `main.py`: launcher da UI e modo `--voice-demo`.
 - `ui_coding/coder_panel.py`: painel visual da aba Coder.
+
+## Ideias futuras
+
+- Ligar `run_template` na pipeline principal da UI.
+- Mostrar sugestoes quando `ask_ai` vier de comando mal entendido.
+- Exibir `project_health` em um card visual na aba Logs.
+- Usar `SessionRecorder` para criar memoria operacional do NEXUS.
+- Criar loja de plugins local para instalar comandos novos sem editar o nucleo.
