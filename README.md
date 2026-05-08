@@ -30,6 +30,7 @@ Interface desktop em CustomTkinter com foco em produtividade, automacao, voz e p
 - Sugestoes de comando em `app/features/command_suggestions.py`.
 - Gravador de sessao em `app/features/session_recorder.py`.
 - Diagnostico de saude do projeto em `app/features/project_health.py`.
+- Pipeline conectada para `modo foco`, `diagnostico do projeto`, `ultimos eventos` e `ajuda`.
 
 ## Rodar
 
@@ -90,8 +91,6 @@ Nexus, acordar
 
 ## Ideias futuras
 
-- Ligar `run_template` na pipeline principal da UI.
-- Mostrar sugestoes quando `ask_ai` vier de comando mal entendido.
 - Exibir `project_health` em um card visual na aba Logs.
-- Usar `SessionRecorder` para criar memoria operacional do NEXUS.
 - Criar loja de plugins local para instalar comandos novos sem editar o nucleo.
+- Transformar templates em editor visual dentro da aba Automacao.

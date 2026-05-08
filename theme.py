@@ -26,12 +26,19 @@ from app.intent_desktop_actions import detect_desktop_intent
 from app.action_policy_pc import evaluate_pc_action
 from app.desktop_dispatcher import DesktopDispatcher
 from app.memory import clear_memory
+from app.core.command_router import CommandRouter
 from app.core.text_utils import remove_wake_word
+from app.features.command_suggestions import format_suggestions
+from app.features.command_templates import describe_templates, get_template
+from app.features.project_health import analyze_project
+from app.features.session_recorder import SessionRecorder
 from coding.intent_coding import detectar_intent_coding
 from coding.dispatcher import executar_intent as executar_coding_intent
 
 
 _desktop_dispatcher = DesktopDispatcher()
+_command_router = CommandRouter()
+_session_recorder = SessionRecorder(ROOT / "data" / "session_events.jsonl")
 
 
 def _confirm_if_needed(intent_name: str, params: dict | None, confirm_callback) -> str | None:
@@ -50,12 +57,28 @@ def processar_comando(texto: str, confirm_callback=None) -> str:
     if not texto:
         return "."
 
+    _record_event("command", texto)
+    try:
+        result = _processar_comando_core(texto, confirm_callback)
+        _record_event("response", result[:1200] if isinstance(result, str) else str(result))
+        return result
+    except Exception as error:
+        result = handle_error(error)
+        _record_event("error", result)
+        return result
+
+
+def _processar_comando_core(texto: str, confirm_callback=None) -> str:
     log_command(texto)
     try:
         from app.settings_manager import get as get_setting
         texto = remove_wake_word(texto, get_setting("wake_word", "nexus")) or texto
     except Exception:
         texto = remove_wake_word(texto, "nexus") or texto
+
+    smart_response = _processar_recursos_inteligentes(texto, confirm_callback)
+    if smart_response:
+        return smart_response
 
     obsidian_response = _processar_obsidian(texto)
     if obsidian_response:
@@ -88,6 +111,65 @@ def processar_comando(texto: str, confirm_callback=None) -> str:
         return blocked
 
     return _executar_intent(intent)
+
+
+def _record_event(kind: str, message: str, **data) -> None:
+    try:
+        _session_recorder.record(kind, message, **data)
+    except Exception:
+        pass
+
+
+def _processar_recursos_inteligentes(texto: str, confirm_callback=None) -> str:
+    command = _command_router.route(texto)
+
+    if command.domain == "system" and command.intent == "help":
+        return (
+            "Comandos principais do NEXUS:\n"
+            f"{describe_templates()}\n\n"
+            f"{format_suggestions(texto, limit=8)}"
+        )
+
+    if command.intent == "run_template":
+        return _executar_template(command.args.get("template", ""), confirm_callback)
+
+    if command.intent == "project_health":
+        return analyze_project(ROOT).as_text()
+
+    if command.intent == "session_summary":
+        return _session_recorder.summary(limit=20)
+
+    return ""
+
+
+def _executar_template(template_name: str, confirm_callback=None) -> str:
+    template = get_template(template_name)
+    if not template:
+        return format_suggestions(template_name or "modo")
+
+    if template.requires_confirmation:
+        question = f"Confirmar execucao do template '{template.name}'?"
+        if not (confirm_callback and confirm_callback(question)):
+            return "Template cancelado."
+
+    outputs = [f"Executando {template.name}: {template.description}"]
+    for step in template.steps:
+        intent_name = step.get("intent", "")
+        args = step.get("args", {}) or {}
+        try:
+            decision = evaluate_pc_action(intent_name)
+            if not decision.allowed:
+                outputs.append(f"- {intent_name}: bloqueado ({decision.reason})")
+                continue
+            if decision.requires_confirmation:
+                question = f"Confirmar acao '{intent_name}'? {decision.reason}".strip()
+                if not (confirm_callback and confirm_callback(question)):
+                    outputs.append(f"- {intent_name}: cancelado")
+                    continue
+            outputs.append(f"- {intent_name}: {_desktop_dispatcher.execute(intent_name, args)}")
+        except Exception as error:
+            outputs.append(f"- {intent_name}: {handle_error(error)}")
+    return "\n".join(outputs)
 
 
 def _processar_obsidian(texto: str) -> str:
