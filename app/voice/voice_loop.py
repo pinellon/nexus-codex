@@ -6,6 +6,7 @@ import threading
 from collections.abc import Callable
 
 from app.core.command_router import CommandRouter
+from app.core.text_utils import normalize_text, remove_wake_word
 from app.logger import log_action, log_command, log_error
 from app.voice_input import ouvir_microfone
 from app.voice_output import falar
@@ -23,9 +24,12 @@ class VoiceLoop:
         self.command_callback = command_callback
         self.event_callback = event_callback
         self.settings = settings or {}
-        self.router = CommandRouter(self.settings.get("wake_word", "nexus"))
+        self.wake_word = normalize_text(self.settings.get("wake_word", "nexus"))
+        self.require_wake_word = bool(self.settings.get("voice_require_wake_word", True))
+        self.router = CommandRouter(self.wake_word)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._active = True
 
     @property
     def running(self) -> bool:
@@ -58,6 +62,28 @@ class VoiceLoop:
             if self._stop.is_set():
                 break
             if not text:
+                continue
+
+            normalized = normalize_text(text)
+            has_wake_word = self.wake_word in normalized
+            direct_command = remove_wake_word(normalized, self.wake_word) if has_wake_word else normalized
+
+            if direct_command in {"parar", "descansar", "dormir", "modo descanso"}:
+                self._active = False
+                self._emit("voice", "Modo descanso ativado.")
+                log_command(f"VOZ: {text} -> voice:sleep")
+                continue
+
+            if not self._active:
+                if has_wake_word or direct_command in {"acordar", "voltar", "ativar"}:
+                    self._active = True
+                    self._emit("voice", "NEXUS ativo.")
+                    if self.settings.get("speak_responses", True):
+                        falar("Voltei.", settings=self.settings)
+                continue
+
+            if self.require_wake_word and not has_wake_word:
+                self._emit("ignored", text)
                 continue
 
             command = self.router.route(text)
