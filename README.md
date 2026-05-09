@@ -33,6 +33,7 @@ Interface desktop em CustomTkinter com foco em produtividade, automacao, voz e p
 - Pipeline conectada para `modo foco`, `diagnostico do projeto`, `ultimos eventos` e `ajuda`.
 - Agente autonomo de pesquisa em `app/agent/`, com busca web, leitura de paginas e salvamento no Obsidian.
 - Modulo de visao em `app/vision/`, com captura de tela, camera, OCR inteligente e analise por GPT-4o Vision.
+- Modulo residencial em `app/home/`, com Home Assistant e Spotify via comandos naturais.
 
 ## Rodar
 
@@ -72,6 +73,11 @@ Nexus, descreve a tela
 Nexus, leia o texto da tela
 Nexus, analisa o codigo na tela
 Nexus, olha a camera
+Nexus, apaga as luzes
+Nexus, status da casa
+Nexus, autentica no Spotify
+Nexus, toca AC/DC no Spotify
+Nexus, o que esta tocando?
 Nexus, parar
 Nexus, acordar
 ```
@@ -95,6 +101,7 @@ Nexus, acordar
 - `app/features/`: recursos extras como modos inteligentes, diagnostico e memoria de sessao.
 - `app/agent/`: agente autonomo de pesquisa com ferramentas de web search, scrape e Obsidian.
 - `app/vision/`: captura e analise visual de tela/camera.
+- `app/home/`: automacao residencial via Home Assistant e controle Spotify.
 - `app/plugins/`: base para comandos externos sem mexer no nucleo.
 - `main.py`: launcher da UI e modo `--voice-demo`.
 - `ui_coding/coder_panel.py`: painel visual da aba Coder.

@@ -9,6 +9,7 @@ from app.core.text_utils import normalize_text, remove_wake_word
 from app.agent.agent_commands import extract_task, is_agent_command
 from app.vision.vision_commands import detect_intent as detect_vision_intent
 from app.vision.vision_commands import is_vision_command
+from app.home.home_commands import detect_home_intent, is_home_command
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,10 @@ class CommandRouter:
         if is_vision_command(command_text):
             intent, question = detect_vision_intent(command_text)
             return Command("vision", "vision", {"intent": intent, "question": question}, raw, normalized)
+
+        if is_home_command(command_text):
+            intent, _params = detect_home_intent(command_text)
+            return Command("home", "home", {"intent": intent}, raw, normalized)
 
         if command_text in {"ajuda", "comandos", "o que voce faz", "o que vc faz"}:
             return Command("help", "system", {"text": command_text}, raw, normalized)

@@ -34,6 +34,7 @@ from app.features.project_health import analyze_project
 from app.features.session_recorder import SessionRecorder
 from app.agent.agent_commands import AgentCommandHandler
 from app.vision.vision_commands import VisionCommandHandler
+from app.home.home_commands import HomeCommandHandler
 from coding.intent_coding import detectar_intent_coding
 from coding.dispatcher import executar_intent as executar_coding_intent
 
@@ -43,6 +44,7 @@ _command_router = CommandRouter()
 _session_recorder = SessionRecorder(ROOT / "data" / "session_events.jsonl")
 _agent_handler: AgentCommandHandler | None = None
 _vision_handler: VisionCommandHandler | None = None
+_home_handler: HomeCommandHandler | None = None
 
 
 def _confirm_if_needed(intent_name: str, params: dict | None, confirm_callback) -> str | None:
@@ -141,6 +143,10 @@ def _processar_recursos_inteligentes(texto: str, confirm_callback=None) -> str:
         _get_vision_handler().handle(texto)
         return f"Visão NEXUS iniciada: {command.args.get('intent', 'análise')}"
 
+    if command.domain == "home" and command.intent == "home":
+        _get_home_handler().handle(texto)
+        return f"Automação residencial iniciada: {command.args.get('intent', 'comando')}"
+
     if command.domain == "system" and command.intent == "help":
         return (
             "Comandos principais do NEXUS:\n"
@@ -188,6 +194,21 @@ def _get_vision_handler() -> VisionCommandHandler:
             ui_callback=lambda message: _record_event("vision", message),
         )
     return _vision_handler
+
+
+def _get_home_handler() -> HomeCommandHandler:
+    global _home_handler
+    if _home_handler is None:
+        try:
+            from app.settings_manager import load as load_settings
+            cfg = load_settings()
+        except Exception:
+            cfg = {}
+        _home_handler = HomeCommandHandler(
+            settings=cfg,
+            ui_callback=lambda message: _record_event("home", message),
+        )
+    return _home_handler
 
 
 def _executar_template(template_name: str, confirm_callback=None) -> str:
