@@ -10,6 +10,23 @@ from .code_editor import CodeEditor
 
 class NexusMind:
     def __init__(self, api_key: str, auto_mode: bool = False, high_improvement: bool = False):
+        # Initialize OpenAI client
+        from openai import OpenAI
+        import logging
+        self.client = OpenAI(api_key=api_key)
+        # High improvement forces autonomous mode and shorter intervals
+        self.high_improvement = high_improvement
+        self.auto_mode = auto_mode or high_improvement
+        self.running = False
+        self.cycle_interval = 60 if high_improvement else 300  # seconds between cycles
+        # Initialize components
+        self.guard = GitGuard()
+        # SelfAnalyzer expects config and logger; provide empty config and self as logger
+        self.analyzer = SelfAnalyzer(config={}, logger=self)
+        self.researcher = WebResearcher()
+        self.editor = CodeEditor()
+        self.log = []
+        self.user_directive = None
         from openai import OpenAI
         import logging
         # Initialize OpenAI client
