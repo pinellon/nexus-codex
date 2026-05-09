@@ -73,9 +73,13 @@ class NexusMindPanel(ctk.CTkFrame):
         ctk.CTkButton(btn_frame, text="Rollback Git", command=self._rollback,
                       font=("Courier", 12), fg_color="transparent", text_color="#F38BA8",
                       border_width=1, border_color="#F38BA8", hover_color="#583640").pack(side="left", padx=4)
-        ctk.CTkButton(btn_frame, text="Ver Evidências", command=self._show_evidence,
+        ctk.CTkButton(btn_frame, text="Ver Melhorias", command=self._show_evidence,
                       font=("Courier", 12), fg_color="transparent", text_color="#A6ACCD",
                       border_width=1, border_color="#A6ACCD", hover_color="#2E2E3E").pack(side="left", padx=4)
+        ctk.CTkButton(btn_frame, text="Abrir Modificado", command=self._open_modified_file,
+                      font=("Courier", 12), fg_color="transparent", text_color="#A6ACCD",
+                      border_width=1, border_color="#A6ACCD", hover_color="#2E2E3E").pack(side="left", padx=4)
+
 
     def _show_evidence(self):
         import os
@@ -166,3 +170,20 @@ class NexusMindPanel(ctk.CTkFrame):
             self._log("⏪ Rollback executado")
         else:
             self._log("❌ Erro ao executar rollback")
+
+    def _open_modified_file(self):
+        import os
+        path = getattr(self.mind, "last_modified_path", None)
+        if not path:
+            self._log("⚠️ Nenhum arquivo foi modificado recentemente neste ciclo.")
+            return
+            
+        full_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", path))
+        if os.path.exists(full_path):
+            self._log(f"📂 Abrindo {path}...")
+            try:
+                os.startfile(full_path)
+            except Exception as e:
+                self._log(f"❌ Erro ao abrir arquivo: {e}")
+        else:
+            self._log("❌ Arquivo não encontrado.")

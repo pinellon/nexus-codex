@@ -9,7 +9,7 @@ from .web_researcher import WebResearcher
 from .code_editor import CodeEditor
 
 class NexusMind:
-    def __init__(self, api_key: str, auto_mode: bool = False, high_improvement: bool = False):
+    def __init__(self, api_key: str, auto_mode: bool = False, high_improvement: bool = False, ui_callback=None):
         # Initialize OpenAI client
         from openai import OpenAI
         import logging
@@ -187,7 +187,9 @@ Retorne APENAS um JSON:
         # 9. Commit da melhoria
         self.guard.commit_before_change(f"[melhoria] {plan.get('summary', '')}")
         self._log(f"✅ Melhoria aplicada: {plan.get('summary', '')}")
-        
+        # Guardar caminho do arquivo modificado para a UI
+        self.last_modified_path = plan.get('file_path')
+
         # 10. Salva relatório de evidências
         from .proof_of_work import ProofOfWork
         pow_instance = ProofOfWork()
