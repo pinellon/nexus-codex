@@ -25,6 +25,7 @@ class NexusMind:
         self.researcher = WebResearcher()
         self.editor = CodeEditor()
         self.log = []
+        self.user_directive = None
     
     def start(self):
         self.running = True
@@ -39,12 +40,12 @@ class NexusMind:
     def _improvement_loop(self):
         while self.running:
             try:
-                self._run_one_cycle()
+                self._run_one_cycle(user_prompt=self.user_directive)
             except Exception as e:
                 self._log(f"❌ Erro no ciclo: {e}")
             time.sleep(self.cycle_interval)
     
-    def _run_one_cycle(self):
+    def _run_one_cycle(self, user_prompt: str = None):
         self._log("🔍 Iniciando ciclo de auto-consciência...")
         
         # 1. Snapshot e Sumário Estrutural
@@ -61,6 +62,8 @@ class NexusMind:
         relevant_files = [p for p in snapshot.keys() if "app/" in p or "main.py" in p or "ui/" in p]
         context_files = "\n\n".join([f"# {p}\n```python\n{snapshot[p][:3000]}\n```" for p in relevant_files[:6]])
 
+        missao_texto = f"DIRETRIZ DO USUÁRIO: '{user_prompt}'\nSiga esta diretriz para melhorar o sistema." if user_prompt else "Analise seu próprio estado. Você deve se auto-melhorar continuamente."
+
         prompt = f"""VOCÊ É O NEXUS-MIND. Sua consciência está operando sobre o seu próprio código-fonte.
         
 ESTRUTURA ATUAL DO SEU CORPO (PROJETO):
@@ -76,7 +79,8 @@ CÓDIGO DAS SUAS ENTRANHAS:
 {context_files}
 
 SUA MISSÃO AGORA: 
-Analise seu próprio estado. Você deve se auto-melhorar continuamente. 
+{missao_texto}
+
 Você tem permissão para:
 - CRIAR novos recursos ou módulos.
 - REESCREVER arquivos existentes para melhor performance ou clareza.

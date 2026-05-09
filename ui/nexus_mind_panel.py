@@ -42,6 +42,12 @@ class NexusMindPanel(ctk.CTkFrame):
                 hover_color="#00FFFF",
             ).pack(side="left", padx=8)
 
+        # Diretriz
+        ctk.CTkLabel(self, text="Diretriz / Foco de melhoria:", font=("Courier", 11)).pack(anchor="w", padx=16, pady=(8,0))
+        self.directive_entry = ctk.CTkEntry(self, font=("Courier", 12), fg_color="#1E1E2E", placeholder_text="Ex: Melhore sua inteligência...", text_color="#A6ACCD")
+        self.directive_entry.pack(fill="x", padx=16, pady=4)
+        self.directive_entry.bind("<KeyRelease>", self._update_directive)
+
         # Intervalo
         ctk.CTkLabel(self, text="Intervalo entre ciclos (min):",
                      font=("Courier", 11)).pack(anchor="w", padx=16, pady=(8,0))
@@ -118,10 +124,13 @@ class NexusMindPanel(ctk.CTkFrame):
         self.log_box.insert("end", msg + "\n")
         self.log_box.see("end")
         self.log_box.configure(state="disabled")
-        # Também printa
-        print(msg)
+        try:
+            print(msg)
+        except UnicodeEncodeError:
+            print(msg.encode('ascii', errors='replace').decode('ascii'))
 
     def _on_toggle(self):
+        self._update_directive()
         self.mind._log = lambda m: self._custom_log(m)
         if self.toggle_var.get():
             self.mind.start()
@@ -142,9 +151,15 @@ class NexusMindPanel(ctk.CTkFrame):
     def _on_interval_change(self, val):
         self.mind.cycle_interval = int(val) * 60
 
+    def _update_directive(self, event=None):
+        texto = self.directive_entry.get().strip()
+        self.mind.user_directive = texto if texto else None
+
     def _manual_cycle(self):
+        self._update_directive()
         self.mind._log = lambda m: self._custom_log(m)
-        threading.Thread(target=self.mind._run_one_cycle, daemon=True).start()
+        directive = self.directive_entry.get().strip() or None
+        threading.Thread(target=self.mind._run_one_cycle, args=(directive,), daemon=True).start()
 
     def _rollback(self):
         if self.mind.guard.rollback():
