@@ -1,5 +1,6 @@
 from __future__ import annotations
 import argparse
+import signal
 from theme import main as ui_main
 from app.config import load_settings
 from app.logs.nexus_logger import build_logger
@@ -32,17 +33,30 @@ def create_voice_components(settings):
     return listener, speaker, router
 
 
+def handle_exit(signum, frame):
+    print('Exiting gracefully...')
+    exit(0)
+
+
 def execute_voice_loop(listener, speaker, router):
+    signal.signal(signal.SIGINT, handle_exit)
     speaker.speak("NEXUS online. Modo demo de voz.")
-    while True:
-        text = listener.listen_once()
-        if not text:
-            continue
-        command = router.route(text)
-        print(f"OUVI: {text}")
-        print(f"ENTENDI: {command.label} {command.args}")
-        if command.intent in {"sleep", "parar", "sair"}:
-            break
+    try:
+        while True:
+            text = listener.listen_once()
+            if not text:
+                continue
+            command = router.route(text)
+            print(f"OUVI: {text}")
+            print(f"ENTENDI: {command.label} {command.args}")
+            if command.intent in {"sleep", "parar", "sair"}:
+                print('Exiting voice loop...')
+                break
+    except Exception as e:
+        logger.error(f"Erro no loop de voz: {e}")
+    finally:
+        listener.cleanup()
+        speaker.cleanup()
 
 
 def init_voice_mode(settings):
