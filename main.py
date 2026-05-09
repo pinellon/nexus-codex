@@ -8,11 +8,27 @@ from app.voice.speaker import VoiceSpeaker
 from app.core.command_router import CommandRouter
 
 
+def create_logger(settings):
+    return build_logger(settings.log_file)
+
+
+def create_voice_listener(settings, logger):
+    return VoiceListener(settings=settings, logger=logger)
+
+
+def create_voice_speaker(settings, logger):
+    return VoiceSpeaker(settings=settings, logger=logger)
+
+
+def create_command_router(settings, logger):
+    return CommandRouter(settings=settings, logger=logger)
+
+
 def create_voice_components(settings):
-    logger = build_logger(settings.log_file)
-    listener = VoiceListener(settings=settings, logger=logger)
-    speaker = VoiceSpeaker(settings=settings, logger=logger)
-    router = CommandRouter(settings=settings, logger=logger)
+    logger = create_logger(settings)
+    listener = create_voice_listener(settings, logger)
+    speaker = create_voice_speaker(settings, logger)
+    router = create_command_router(settings, logger)
     return listener, speaker, router
 
 
@@ -34,13 +50,16 @@ def init_voice_mode(settings):
     execute_voice_loop(listener, speaker, router)
 
 
-def main():
+def parse_arguments():
     parser = argparse.ArgumentParser(prog="nexus")
     parser.add_argument("--voice-demo", action="store_true", help="roda loop de voz no terminal")
     args = parser.parse_args()
+    return args
 
+
+def main():
+    args = parse_arguments()
     settings = load_settings()
-
     if args.voice_demo:
         init_voice_mode(settings)
     else:
