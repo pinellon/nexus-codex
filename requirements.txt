@@ -11,6 +11,7 @@ SpeechRecognition>=3.10.0
 sounddevice>=0.5.0
 numpy>=2.0.0
 Pillow>=10.0.0
+opencv-python>=4.9.0
 keyboard>=0.13.5
 edge-tts>=6.1.12
 elevenlabs>=1.0.0

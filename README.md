@@ -32,6 +32,7 @@ Interface desktop em CustomTkinter com foco em produtividade, automacao, voz e p
 - Diagnostico de saude do projeto em `app/features/project_health.py`.
 - Pipeline conectada para `modo foco`, `diagnostico do projeto`, `ultimos eventos` e `ajuda`.
 - Agente autonomo de pesquisa em `app/agent/`, com busca web, leitura de paginas e salvamento no Obsidian.
+- Modulo de visao em `app/vision/`, com captura de tela, camera, OCR inteligente e analise por GPT-4o Vision.
 
 ## Rodar
 
@@ -67,6 +68,10 @@ Nexus, corrija esse codigo
 Nexus, documente esse codigo
 Nexus, pesquisa Python async e salva no Obsidian
 Nexus, parar agente
+Nexus, descreve a tela
+Nexus, leia o texto da tela
+Nexus, analisa o codigo na tela
+Nexus, olha a camera
 Nexus, parar
 Nexus, acordar
 ```
@@ -89,6 +94,7 @@ Nexus, acordar
 - `app/coder/editor_bridge.py`: ponte entre voz, botoes e editor.
 - `app/features/`: recursos extras como modos inteligentes, diagnostico e memoria de sessao.
 - `app/agent/`: agente autonomo de pesquisa com ferramentas de web search, scrape e Obsidian.
+- `app/vision/`: captura e analise visual de tela/camera.
 - `app/plugins/`: base para comandos externos sem mexer no nucleo.
 - `main.py`: launcher da UI e modo `--voice-demo`.
 - `ui_coding/coder_panel.py`: painel visual da aba Coder.

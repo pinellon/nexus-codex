@@ -20,6 +20,7 @@ import app.settings_manager as settings
 from ui.theme import BTN, C, F
 from ui.widgets import AmbientScanner, LiveGraph, MiniBar, PulseIndicator, SoundBus, StatusTicker, bind_button_fx, show_toast
 from ui_coding.coder_panel import CoderPanel
+from app.vision.vision_panel import VisionPanel
 
 
 class NexusApp(ctk.CTk):
@@ -173,6 +174,7 @@ class NexusApp(ctk.CTk):
     def _build_sidebar(self):
         tabs = [("💬", "chat", "Chat"), ("⚡", "auto", "Automação"), ("💻", "coder", "Coder"), ("⚙", "config", "Configurações"), ("📋", "logs", "Logs")]
         self._tab_btns = {}
+        tabs.insert(3, ("VISION", "vision", "Visao"))
         for icon, key, name in tabs:
             lbl = tk.Label(self._sidebar_frame, text=icon, bg=C["panel"], fg=C["text_dim"], font=("Arial", 18), cursor="hand2")
             lbl.pack(fill="x", padx=5, pady=4, ipady=8)
@@ -187,6 +189,7 @@ class NexusApp(ctk.CTk):
             "chat": self._build_chat_tab(),
             "auto": self._build_auto_tab(),
             "coder": self._build_coder_tab(),
+            "vision": self._build_vision_tab(),
             "config": self._build_config_tab(),
             "logs": self._build_logs_tab(),
         }
@@ -215,6 +218,14 @@ class NexusApp(ctk.CTk):
         except Exception:
             pass
         return self._coder_panel
+
+    def _build_vision_tab(self) -> tk.Frame:
+        self._vision_panel = VisionPanel(
+            self._content_host,
+            settings=self._cfg,
+            on_result=lambda message: self.after(0, lambda m=message: self._add_chat_message("assistant", m)),
+        )
+        return self._vision_panel
 
     def _build_chat_tab(self) -> tk.Frame:
         frame = tk.Frame(self._content_host, bg=C["bg"])

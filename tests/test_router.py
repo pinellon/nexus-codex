@@ -25,6 +25,18 @@ def test_smart_feature_routes():
     assert events.intent == "session_summary"
 
 
+def test_vision_routes():
+    router = CommandRouter("nexus")
+
+    screen = router.route("nexus descreve a tela")
+    assert screen.domain == "vision"
+    assert screen.args["intent"] == "describe_screen"
+
+    code = router.route("nexus analisa o codigo na tela")
+    assert code.domain == "vision"
+    assert code.args["intent"] == "analyze_code"
+
+
 def test_dangerous_confirmation_can_cancel():
     router = CommandRouter("nexus")
     command = router.route("nexus desligar pc")

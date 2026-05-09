@@ -33,6 +33,7 @@ from app.features.command_templates import describe_templates, get_template
 from app.features.project_health import analyze_project
 from app.features.session_recorder import SessionRecorder
 from app.agent.agent_commands import AgentCommandHandler
+from app.vision.vision_commands import VisionCommandHandler
 from coding.intent_coding import detectar_intent_coding
 from coding.dispatcher import executar_intent as executar_coding_intent
 
@@ -41,6 +42,7 @@ _desktop_dispatcher = DesktopDispatcher()
 _command_router = CommandRouter()
 _session_recorder = SessionRecorder(ROOT / "data" / "session_events.jsonl")
 _agent_handler: AgentCommandHandler | None = None
+_vision_handler: VisionCommandHandler | None = None
 
 
 def _confirm_if_needed(intent_name: str, params: dict | None, confirm_callback) -> str | None:
@@ -135,6 +137,10 @@ def _processar_recursos_inteligentes(texto: str, confirm_callback=None) -> str:
         _get_agent_handler().stop()
         return "Agente autônomo parado."
 
+    if command.domain == "vision" and command.intent == "vision":
+        _get_vision_handler().handle(texto)
+        return f"Visão NEXUS iniciada: {command.args.get('intent', 'análise')}"
+
     if command.domain == "system" and command.intent == "help":
         return (
             "Comandos principais do NEXUS:\n"
@@ -167,6 +173,21 @@ def _get_agent_handler() -> AgentCommandHandler:
             ui_callback=lambda message: _record_event("agent", message),
         )
     return _agent_handler
+
+
+def _get_vision_handler() -> VisionCommandHandler:
+    global _vision_handler
+    if _vision_handler is None:
+        try:
+            from app.settings_manager import load as load_settings
+            cfg = load_settings()
+        except Exception:
+            cfg = {}
+        _vision_handler = VisionCommandHandler(
+            settings=cfg,
+            ui_callback=lambda message: _record_event("vision", message),
+        )
+    return _vision_handler
 
 
 def _executar_template(template_name: str, confirm_callback=None) -> str:
