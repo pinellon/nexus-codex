@@ -13,6 +13,29 @@ class SelfAnalyzer:
             self.logger.info('Analysis Complete')
         return issues
 
+    def get_cpu_usage(self) -> float:
+        """Retorna o uso de CPU em percentual usando ``psutil`` quando disponível.
+        Fallback para 0.0 se a biblioteca não estiver instalada.
+        """
+        try:
+            import psutil
+            return psutil.cpu_percent(interval=0.1)
+        except Exception:
+            self.logger.warning('psutil não encontrado, usando valor placeholder para CPU')
+            return 0.0
+
+    def get_memory_usage(self) -> float:
+        """Retorna o uso de memória em MB usando ``psutil`` quando disponível.
+        Fallback para 0.0 se a biblioteca não estiver instalada.
+        """
+        try:
+            import psutil
+            mem = psutil.virtual_memory().used
+            return mem / (1024 * 1024)  # converte para MB
+        except Exception:
+            self.logger.warning('psutil não encontrado, usando valor placeholder para memória')
+            return 0.0
+
     def _detect_large_files(self):
         # Implement logic to find large files
         return ['.\app\home\home_commands.py', '.\coding\scaffolder.py']  # sample return
