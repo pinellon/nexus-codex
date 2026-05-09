@@ -9,7 +9,16 @@ from .web_researcher import WebResearcher
 from .code_editor import CodeEditor
 
 class NexusMind:
-    def __init__(self, api_key: str, auto_mode: bool = False):
+    def __init__(self, api_key: str, auto_mode: bool = False, high_improvement: bool = False):
+        from openai import OpenAI
+        import logging
+        # Initialize OpenAI client
+        self.client = OpenAI(api_key=api_key)
+        # High improvement forces autonomous mode and shorter intervals
+        self.high_improvement = high_improvement
+        self.auto_mode = auto_mode or high_improvement
+        self.running = False
+        self.cycle_interval = 60 if high_improvement else 300  # seconds between cycles
         from openai import OpenAI
         
         # O usuário enviou código para usar Anthropic, mas como o sistema usa OpenAI nativamente,
