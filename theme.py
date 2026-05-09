@@ -32,6 +32,7 @@ from app.features.command_suggestions import format_suggestions
 from app.features.command_templates import describe_templates, get_template
 from app.features.project_health import analyze_project
 from app.features.session_recorder import SessionRecorder
+from app.agent.agent_commands import AgentCommandHandler
 from coding.intent_coding import detectar_intent_coding
 from coding.dispatcher import executar_intent as executar_coding_intent
 
@@ -39,6 +40,7 @@ from coding.dispatcher import executar_intent as executar_coding_intent
 _desktop_dispatcher = DesktopDispatcher()
 _command_router = CommandRouter()
 _session_recorder = SessionRecorder(ROOT / "data" / "session_events.jsonl")
+_agent_handler: AgentCommandHandler | None = None
 
 
 def _confirm_if_needed(intent_name: str, params: dict | None, confirm_callback) -> str | None:
@@ -123,6 +125,16 @@ def _record_event(kind: str, message: str, **data) -> None:
 def _processar_recursos_inteligentes(texto: str, confirm_callback=None) -> str:
     command = _command_router.route(texto)
 
+    if command.domain == "agent" and command.intent == "agent_task":
+        task = command.args.get("task", texto)
+        handler = _get_agent_handler()
+        handler.handle(task)
+        return f"Agente autônomo iniciado: {task}"
+
+    if command.domain == "agent" and command.intent == "stop_agent":
+        _get_agent_handler().stop()
+        return "Agente autônomo parado."
+
     if command.domain == "system" and command.intent == "help":
         return (
             "Comandos principais do NEXUS:\n"
@@ -140,6 +152,21 @@ def _processar_recursos_inteligentes(texto: str, confirm_callback=None) -> str:
         return _session_recorder.summary(limit=20)
 
     return ""
+
+
+def _get_agent_handler() -> AgentCommandHandler:
+    global _agent_handler
+    if _agent_handler is None:
+        try:
+            from app.settings_manager import load as load_settings
+            cfg = load_settings()
+        except Exception:
+            cfg = {}
+        _agent_handler = AgentCommandHandler(
+            settings=cfg,
+            ui_callback=lambda message: _record_event("agent", message),
+        )
+    return _agent_handler
 
 
 def _executar_template(template_name: str, confirm_callback=None) -> str:

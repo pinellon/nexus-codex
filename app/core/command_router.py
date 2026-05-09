@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.text_utils import normalize_text, remove_wake_word
+from app.agent.agent_commands import extract_task, is_agent_command
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,12 @@ class CommandRouter:
 
         if not command_text:
             return Command("empty", "system", raw=raw, normalized=normalized)
+
+        if command_text in {"parar agente", "cancelar pesquisa", "cancelar agente"}:
+            return Command("stop_agent", "agent", {}, raw, normalized)
+
+        if is_agent_command(command_text):
+            return Command("agent_task", "agent", {"task": extract_task(command_text)}, raw, normalized)
 
         if command_text in {"ajuda", "comandos", "o que voce faz", "o que vc faz"}:
             return Command("help", "system", {"text": command_text}, raw, normalized)
