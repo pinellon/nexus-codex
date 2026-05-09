@@ -1,20 +1,17 @@
-"""Logger no formato solicitado pelo modo operacional."""
-
-from __future__ import annotations
-
 import logging
-from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
 
-def build_logger(log_file: Path | str) -> logging.Logger:
-    path = Path(log_file)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("NEXUS_OPERATIONAL")
-    logger.setLevel(logging.INFO)
-    logger.handlers.clear()
-    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s", "%Y-%m-%d %H:%M:%S")
+def build_logger(log_file_path: str) -> logging.Logger:
+    logger = logging.getLogger('nexus')
+    logger.setLevel(logging.DEBUG)
 
-    file_handler = logging.FileHandler(path, encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    handler = RotatingFileHandler(log_file_path, maxBytes=1024*1024, backupCount=5)
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+
+    if not logger.handlers:
+        logger.addHandler(handler)
+
     return logger
