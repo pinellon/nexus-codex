@@ -38,7 +38,17 @@ def handle_exit(signum, frame):
     exit(0)
 
 
-def execute_voice_loop(listener, speaker, router):
+def process_command(text, router, speaker, logger):
+    command = router.route(text)
+    print(f"OUVI: {text}")
+    print(f"ENTENDI: {command.label} {command.args}")
+    if command.intent in {"sleep", "parar", "sair"}:
+        print('Exiting voice loop...')
+        return False
+    return True
+
+
+def execute_voice_loop(listener, speaker, router, logger):
     signal.signal(signal.SIGINT, handle_exit)
     speaker.speak("NEXUS online. Modo demo de voz.")
     try:
@@ -46,11 +56,7 @@ def execute_voice_loop(listener, speaker, router):
             text = listener.listen_once()
             if not text:
                 continue
-            command = router.route(text)
-            print(f"OUVI: {text}")
-            print(f"ENTENDI: {command.label} {command.args}")
-            if command.intent in {"sleep", "parar", "sair"}:
-                print('Exiting voice loop...')
+            if not process_command(text, router, speaker, logger):
                 break
     except Exception as e:
         logger.error(f"Erro no loop de voz: {e}")
@@ -61,7 +67,8 @@ def execute_voice_loop(listener, speaker, router):
 
 def init_voice_mode(settings):
     listener, speaker, router = create_voice_components(settings)
-    execute_voice_loop(listener, speaker, router)
+    logger = create_logger(settings)
+    execute_voice_loop(listener, speaker, router, logger)
 
 
 def parse_arguments():
