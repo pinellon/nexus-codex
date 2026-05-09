@@ -8,12 +8,15 @@ from app.voice.speaker import VoiceSpeaker
 from app.core.command_router import CommandRouter
 
 
-def init_voice_mode(settings):
+def create_voice_components(settings):
     logger = build_logger(settings.log_file)
     listener = VoiceListener(settings=settings, logger=logger)
     speaker = VoiceSpeaker(settings=settings, logger=logger)
     router = CommandRouter(settings=settings, logger=logger)
+    return listener, speaker, router
 
+
+def execute_voice_loop(listener, speaker, router):
     speaker.speak("NEXUS online. Modo demo de voz.")
     while True:
         text = listener.listen_once()
@@ -24,6 +27,12 @@ def init_voice_mode(settings):
         print(f"ENTENDI: {command.label} {command.args}")
         if command.intent in {"sleep", "parar", "sair"}:
             break
+
+
+def init_voice_mode(settings):
+    listener, speaker, router = create_voice_components(settings)
+    execute_voice_loop(listener, speaker, router)
+
 
 def main():
     parser = argparse.ArgumentParser(prog="nexus")
