@@ -47,7 +47,7 @@ class NexusMind:
         self.cycle_interval = 300  # segundos entre ciclos (5 min)
         
         self.guard = GitGuard()
-        self.analyzer = SelfAnalyzer()
+        self.analyzer = SelfAnalyzer(config={}, logger=self)
         self.researcher = WebResearcher()
         self.editor = CodeEditor()
         self.log = []
