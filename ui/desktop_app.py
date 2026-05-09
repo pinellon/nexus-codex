@@ -175,6 +175,7 @@ class NexusApp(ctk.CTk):
         tabs = [("💬", "chat", "Chat"), ("⚡", "auto", "Automação"), ("💻", "coder", "Coder"), ("⚙", "config", "Configurações"), ("📋", "logs", "Logs")]
         self._tab_btns = {}
         tabs.insert(3, ("VISION", "vision", "Visao"))
+        tabs.insert(4, ("🧠", "mind", "NexusMind"))
         for icon, key, name in tabs:
             lbl = tk.Label(self._sidebar_frame, text=icon, bg=C["panel"], fg=C["text_dim"], font=("Arial", 18), cursor="hand2")
             lbl.pack(fill="x", padx=5, pady=4, ipady=8)
@@ -190,6 +191,7 @@ class NexusApp(ctk.CTk):
             "auto": self._build_auto_tab(),
             "coder": self._build_coder_tab(),
             "vision": self._build_vision_tab(),
+            "mind": self._build_mind_tab(),
             "config": self._build_config_tab(),
             "logs": self._build_logs_tab(),
         }
@@ -226,6 +228,17 @@ class NexusApp(ctk.CTk):
             on_result=lambda message: self.after(0, lambda m=message: self._add_chat_message("assistant", m)),
         )
         return self._vision_panel
+
+    def _build_mind_tab(self) -> tk.Frame:
+        try:
+            from ui.nexus_mind_panel import NexusMindPanel
+            self._mind_panel = NexusMindPanel(self._content_host, settings=self._cfg)
+            return self._mind_panel
+        except Exception as e:
+            from ui.theme import C
+            err_frame = tk.Frame(self._content_host, bg=C["bg"])
+            tk.Label(err_frame, text=f"Erro ao carregar NexusMind:\n{e}", bg=C["bg"], fg="red").pack(pady=20)
+            return err_frame
 
     def _build_chat_tab(self) -> tk.Frame:
         frame = tk.Frame(self._content_host, bg=C["bg"])
