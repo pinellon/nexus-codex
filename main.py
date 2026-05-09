@@ -14,30 +14,27 @@ def create_logger(settings):
     return build_logger(settings.log_file)
 
 
-def create_voice_listener(settings, logger):
+def create_voice_listener(settings):
     """Initialize a voice listener component."""
-    return VoiceListener(settings=settings, logger=logger)
+    return VoiceListener(settings=settings, logger=create_logger(settings))
 
 
-def create_voice_speaker(settings, logger):
+def create_voice_speaker(settings):
     """Initialize a voice speaker component."""
-    return VoiceSpeaker(settings=settings, logger=logger)
+    return VoiceSpeaker(settings=settings, logger=create_logger(settings))
 
 
-def create_command_router(settings, logger):
+def create_command_router(settings):
     """Setup the command router to handle voice input."""
-    return CommandRouter(settings=settings, logger=logger)
+    return CommandRouter(settings=settings, logger=create_logger(settings))
 
 
-def create_voice_components(settings):
-    """Aggregate creation of voice components with logging."""
-    logger = create_logger(settings)
-    return {
-        "listener": create_voice_listener(settings, logger),
-        "speaker": create_voice_speaker(settings, logger),
-        "router": create_command_router(settings, logger),
-        "logger": logger
-    }
+class VoiceComponents:
+    def __init__(self, settings):
+        self.logger = create_logger(settings)
+        self.listener = create_voice_listener(settings)
+        self.speaker = create_voice_speaker(settings)
+        self.router = create_command_router(settings)
 
 
 def handle_exit(signum, frame):
@@ -48,7 +45,7 @@ def handle_exit(signum, frame):
 
 def process_command(text, components):
     """Process voice command via router and execute its action if valid."""
-    command = components["router"].route(text)
+    command = components.router.route(text)
     print(f"OUVI: {text}")
     print(f"ENTENDI: {command.label} {command.args}")
     if command.intent in {"sleep", "parar", "sair"}:
@@ -60,24 +57,24 @@ def process_command(text, components):
 def execute_voice_loop(components):
     """Run the interactive voice loop interfacing all components."""
     signal.signal(signal.SIGINT, handle_exit)
-    components["speaker"].speak("NEXUS online. Modo demo de voz.")
+    components.speaker.speak("NEXUS online. Modo demo de voz.")
     try:
         while True:
-            text = components["listener"].listen_once()
+            text = components.listener.listen_once()
             if not text:
                 continue
             if not process_command(text, components):
                 break
     except Exception as e:
-        components["logger"].error(f"Erro no loop de voz: {e}")
+        components.logger.error(f"Erro no loop de voz: {e}")
     finally:
-        components["listener"].cleanup()
-        components["speaker"].cleanup()
+        components.listener.cleanup()
+        components.speaker.cleanup()
 
 
 def init_voice_mode(settings):
     """Initialize and commence voice interaction mode."""
-    components = create_voice_components(settings)
+    components = VoiceComponents(settings)
     execute_voice_loop(components)
 
 
@@ -97,7 +94,3 @@ def main():
         init_voice_mode(settings)
     else:
         ui_main()
-
-
-if __name__ == "__main__":
-    main()
