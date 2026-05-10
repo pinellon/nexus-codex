@@ -1,25 +1,31 @@
-# app/voice/voice_demo.py
+# voice_demo.py
 
-from app.config import load_settings
-from app.logs.nexus_logger import build_logger
+"""
+Este módulo contém a lógica do loop da demonstração de voz.
+"""
+
 from app.voice.listener import VoiceListener
 from app.voice.speaker import VoiceSpeaker
 from app.core.command_router import CommandRouter
 
-def run_voice_demo():
-    settings = load_settings()
-    logger = build_logger(settings.log_file)
+VOICE_DEMO_MESSAGE = "NEXUS online. Modo demo de voz."
+EXIT_COMMANDS = {"sleep", "parar", "sair"}
+
+
+def run_voice_demo(settings, logger):
     listener = VoiceListener(settings=settings, logger=logger)
     speaker = VoiceSpeaker(settings=settings, logger=logger)
     router = CommandRouter(settings=settings, logger=logger)
 
-    speaker.speak('NEXUS online. Modo demo de voz.')
-    while True:
-        text = listener.listen_once()
-        if not text:
-            continue
-        command = router.route(text)
-        print(f'OUVI: {text}')
-        print(f'ENTENDI: {command.label} {command.args}')
-        if command.intent in {'sleep', 'parar', 'sair'}:
-            break
+    speaker.speak(VOICE_DEMO_MESSAGE)
+    try:
+        while True:
+            text = listener.listen_once()
+            if text:
+                command = router.route(text)
+                print(f"OUVI: {text}")
+                print(f"ENTENDI: {command.label} {command.args}")
+                if command.intent in EXIT_COMMANDS:
+                    break
+    finally:
+        logger.close()
