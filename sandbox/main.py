@@ -1,10 +1,6 @@
 # main.py
 
-"""Launcher principal do NEXUS.
-
-Por padrão abre a interface visual. Use `python main.py --voice-demo` para
-testar o modo de voz em terminal.
-"""
+"Launcher principal do NEXUS."
 
 from __future__ import annotations
 
