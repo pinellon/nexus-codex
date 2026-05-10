@@ -1,19 +1,17 @@
+# chat_handler.py
+
+from transformers import pipeline
+import logging
 
 class ChatHandler:
-    def __init__(self, settings, logger, command_router):
-        self.settings = settings
+    def __init__(self, logger: logging.Logger):
         self.logger = logger
-        self.command_router = command_router
+        self.chatbot = pipeline("conversational", model="facebook/blenderbot-400M-distill")
 
-    def handle_message(self, message):
+    def handle_message(self, user_message: str) -> str:
         try:
-            command = self.command_router.route(message)
-            response = self.process_command(command)
-            return response
+            response = self.chatbot(user_message)
+            return response["generated_responses"][0]
         except Exception as e:
-            self.logger.error(f"Erro ao processar mensagem: {str(e)}")
-            return "Houve um erro ao processar sua mensagem."
-
-    def process_command(self, command):
-        # Adiciona lógica específica de comando. No momento, retornará o rótulo do comando e os argumentos.
-        return f"Comando: {command.label}, Args: {command.args}"
+            self.logger.error(f"Erro ao processar a mensagem de chat: {str(e)}")
+            return "Desculpe, não consegui processar sua solicitação no momento."
