@@ -22,14 +22,15 @@ def run_voice_demo(settings, logger):
     speaker = VoiceSpeaker(settings=settings, logger=logger)
     router = CommandRouter(settings=settings, logger=logger)
 
+    logger.info("NEXUS online. Modo demo de voz.")
     speaker.speak("NEXUS online. Modo demo de voz.")
     while True:
         text = listener.listen_once()
         if not text:
             continue
         command = router.route(text)
-        print(f"OUVI: {text}")
-        print(f"ENTENDI: {command.label} {command.args}")
+        logger.info(f"OUVI: {text}")
+        logger.info(f"ENTENDI: {command.label} {command.args}")
         if command.intent in {"sleep", "parar", "sair"}:
             break
 
