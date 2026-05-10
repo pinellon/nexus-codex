@@ -22,14 +22,17 @@ def run_voice_demo(settings, logger):
     router = CommandRouter(settings=settings, logger=logger)
 
     speaker.speak(VOICE_DEMO_MESSAGE)
-    while True:
-        text = listener.listen_once()
-        if text:
-            command = router.route(text)
-            print(f"OUVI: {text}")
-            print(f"ENTENDI: {command.label} {command.args}")
-            if command.intent in EXIT_COMMANDS:
-                break
+    try:
+        while True:
+            text = listener.listen_once()
+            if text:
+                command = router.route(text)
+                print(f"OUVI: {text}")
+                print(f"ENTENDI: {command.label} {command.args}")
+                if command.intent in EXIT_COMMANDS:
+                    break
+    finally:
+        logger.close()
 
 
 def parse_arguments():
