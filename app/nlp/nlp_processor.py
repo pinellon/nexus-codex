@@ -1,18 +1,15 @@
 # app/nlp/nlp_processor.py
 
 class NLPProcessor:
-    def __init__(self):
-        """Inicializa modelos de NLP necessários, se aplicável."""
-        pass
+    def __init__(self, settings, logger):
+        self.settings = settings
+        self.logger = logger
 
-    def process_text(self, text: str) -> dict:
-        """Processa o texto e retorna uma estrutura de dados representando intenções e argumentos mais ricos.
-        Args:
-            text (str): Texto bruto a ser processado.
-        Returns:
-            dict: Uma representação estruturada da intenção do usuário e seus argumentos.
-        """
-        # Simula um processo de NLP mais avançado
-        if "parar" in text or "sair" in text:
-            return {"intent": "sair", "label": "termination", "args": []}
-        return {"intent": "comando_desconhecido", "label": "unknown", "args": [text]}
+    def interpret(self, text):
+        # Código fictício apenas para exemplo, em produção você usaria um modelo de NLP treinado
+        if 'ajuda' in text.lower():
+            return {'intent': 'assist', 'label': 'ajuda', 'args': []}
+        elif 'parar' in text.lower() or 'sair' in text.lower():
+            return {'intent': 'stop', 'label': 'parar', 'args': []}
+        else:
+            return {'intent': 'unknown', 'label': 'não entendido', 'args': []}
