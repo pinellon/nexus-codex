@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+
 from app.config import load_settings
 from app.logs.nexus_logger import build_logger
 from app.voice.listener import VoiceListener
@@ -33,15 +34,18 @@ def run_voice_demo(settings, logger):
     finally:
         logger.close()
 
+
 def parse_arguments():
     parser = argparse.ArgumentParser(prog="nexus")
     parser.add_argument("--voice-demo", action="store_true", help="roda loop de voz no terminal")
     return parser.parse_args()
 
+
 def setup_environment():
     settings = load_settings()
     logger = build_logger(settings.log_file)
     return settings, logger
+
 
 def execute_mode(args, settings, logger):
     if args.voice_demo:
@@ -49,10 +53,12 @@ def execute_mode(args, settings, logger):
     else:
         ui_main()
 
+
 def main():
     args = parse_arguments()
     settings, logger = setup_environment()
     execute_mode(args, settings, logger)
+
 
 if __name__ == "__main__":
     main()
