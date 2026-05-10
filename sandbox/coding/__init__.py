@@ -1,2 +1,0 @@
-"""Ferramentas do NEXUS CODER."""
-
