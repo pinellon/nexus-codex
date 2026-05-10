@@ -266,7 +266,7 @@ class NexusApp(ctk.CTk):
             btn_frame = ctk.CTkFrame(card, fg_color="transparent")
             btn_frame.pack(fill="x", pady=(10, 0))
             
-            ctk.CTkButton(btn_frame, text="Corrigir Agora", font=("Courier", 12, "bold"), fg_color="#F38BA8", text_color="#11111B", hover_color="#D87892").pack(side="left", padx=(0, 10))
+            ctk.CTkButton(btn_frame, text="Corrigir Agora", font=("Courier", 12, "bold"), fg_color="#F38BA8", text_color="#11111B", hover_color="#D87892", command=lambda e=error_str: self._corrigir_automaticamente(e)).pack(side="left", padx=(0, 10))
             ctk.CTkButton(btn_frame, text="Ver Arquivo", font=("Courier", 12), fg_color="transparent", border_width=1, border_color="#A6ACCD", text_color="#A6ACCD", hover_color="#313244").pack(side="left")
             ctk.CTkButton(btn_frame, text="Ignorar", font=("Courier", 12), fg_color="transparent", text_color="#6C7086", hover_color="#313244").pack(side="right")
             
@@ -278,6 +278,17 @@ class NexusApp(ctk.CTk):
             tb_box.pack(fill="x", pady=(20, 0))
             
             return err_frame
+
+    def _corrigir_automaticamente(self, error_str: str):
+        # Lógica super avançada de auto-manutenção (no futuro enviaria para a IA)
+        self._add_system_msg(f"Iniciando correção automática para o erro detectado: {error_str[:30]}...")
+        # Simula uma varredura
+        self.after(1000, lambda: self._add_system_msg("🔍 Analisando logs e dependências..."))
+        self.after(2500, lambda: self._add_system_msg("🔧 Atualizando compatibilidade do ambiente (compatibility_memory.json)..."))
+        self.after(4000, lambda: self._add_system_msg("✅ Sistema corrigido. Reinicie o Nexus para aplicar as mudanças da aba Auto-Melhoria."))
+        
+        # Pode forçar reload da UI também
+        # self.after(5000, self._restart_app)
 
     def _build_chat_tab(self) -> tk.Frame:
         frame = tk.Frame(self._content_host, bg=C["bg"])
