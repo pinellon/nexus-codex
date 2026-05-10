@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import sys
 
+
 class TestMain(unittest.TestCase):
 
     @patch('app.config.load_settings')
@@ -12,23 +13,20 @@ class TestMain(unittest.TestCase):
     @patch('app.core.command_router.CommandRouter.route')
     @patch('app.voice.speaker.VoiceSpeaker.speak')
     def test_voice_demo(self, mock_speak, mock_route, mock_listen_once, mock_build_logger, mock_load_settings):
-        # Verifica se a função speak é chamada corretamente
         mock_command = MagicMock()
         mock_command.intent = 'sair'
         mock_command.label = 'teste'
         mock_command.args = []
         mock_route.return_value = mock_command
-
+        
         test_args = ['main.py', '--voice-demo']
         with patch.object(sys, 'argv', test_args):
-            try:
-                import main  # Importa aqui para garantir que sys.argv seja atualizado corretamente
-                main.main()  # Chamando explicitamente main()
-            except Exception as e:
-                self.fail(f"Unexpected error occurred: {e}")
-
+            import main  # Importando aqui para garantir que sys.argv seja atualizado corretamente
+            main.main()  # Chamando explicitamente main()
+        
         mock_route.assert_called_once_with('comando de teste')
         mock_speak.assert_called_once_with('NEXUS online. Modo demo de voz.')
+
 
 if __name__ == '__main__':
     unittest.main()
