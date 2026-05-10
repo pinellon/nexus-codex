@@ -1,28 +1,19 @@
-# chat_handler.py
-
-"""
-Módulo responsável por lidar com interações de chat textual no NEXUS.
-"""
-
-from app.core.command_router import CommandRouter
 
 class ChatHandler:
-    def __init__(self, settings, logger):
+    def __init__(self, settings, logger, command_router):
+        self.settings = settings
         self.logger = logger
-        self.router = CommandRouter(settings=settings, logger=logger)
+        self.command_router = command_router
 
-    def process_input(self, text: str):
-        """Processa a entrada de texto do usuário e retorna uma resposta."""
+    def handle_message(self, message):
         try:
-            command = self.router.route(text)
-            response = self.generate_response(command)
-            self.logger.info(f"PROCESSADO: {command.label} {command.args}")
+            command = self.command_router.route(message)
+            response = self.process_command(command)
             return response
         except Exception as e:
-            self.logger.error(f"Erro ao processar chat: {str(e)}")
-            return "Ocorreu um erro. Tente novamente."
+            self.logger.error(f"Erro ao processar mensagem: {str(e)}")
+            return "Houve um erro ao processar sua mensagem."
 
-    def generate_response(self, command):
-        """Gera uma resposta com base no comando interpretado."""
-        # Esta função poderia ser expandida para realizar ações e gerar respostas mais dinâmicas
-        return f"Comando {command.label} recebido com argumentos {command.args}."
+    def process_command(self, command):
+        # Adiciona lógica específica de comando. No momento, retornará o rótulo do comando e os argumentos.
+        return f"Comando: {command.label}, Args: {command.args}"
