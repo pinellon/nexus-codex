@@ -24,14 +24,17 @@ def run_voice_demo(settings, logger):
 
     speaker.speak("NEXUS online. Modo demo de voz.")
     while True:
-        text = listener.listen_once()
-        if not text:
-            continue
-        command = router.route(text)
-        print(f"OUVI: {text}")
-        print(f"ENTENDI: {command.label} {command.args}")
-        if command.intent in {"sleep", "parar", "sair"}:
-            break
+        try:
+            text = listener.listen_once()
+            if not text:
+                continue
+            command = router.route(text)
+            print(f"OUVI: {text}")
+            print(f"ENTENDI: {command.label} {command.args}")
+            if command.intent in {"sleep", "parar", "sair"}:
+                break
+        except Exception as e:
+            logger.error(f"Erro durante a execução do loop de voz: {str(e)}")
 
 
 def main():
