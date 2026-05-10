@@ -16,7 +16,7 @@ class SandboxManager:
         
         # Copia todos os arquivos, exceto pastas de ambiente virtual, .git e sandbox
         for item in os.listdir(self.root_dir):
-            if item in ['.git', 'venv', 'env', '__pycache__', 'sandbox', '.pytest_cache']:
+            if item in ['.git', 'venv', 'env', '__pycache__', 'sandbox', '.pytest_cache', 'data', 'logs']:
                 continue
             
             s = os.path.join(self.root_dir, item)
@@ -43,18 +43,21 @@ class SandboxManager:
         # Para um ambiente real, seria mais seguro usar git para copiar apenas arquivos modificados,
         # ou shutil para mover do sandbox de volta para a raiz.
         for item in os.listdir(self.sandbox_dir):
-            if item in ['__pycache__']:
+            if item in ['__pycache__', 'data', 'logs']:
                 continue
                 
             s = os.path.join(self.sandbox_dir, item)
             d = os.path.join(self.root_dir, item)
             
-            if os.path.isdir(s):
-                if os.path.exists(d):
-                    shutil.rmtree(d)
-                shutil.copytree(s, d)
-            else:
-                shutil.copy2(s, d)
+            try:
+                if os.path.isdir(s):
+                    if os.path.exists(d):
+                        shutil.rmtree(d, ignore_errors=True)
+                    shutil.copytree(s, d)
+                else:
+                    shutil.copy2(s, d)
+            except Exception as e:
+                print(f"Erro ao mover do sandbox para live: {e}")
                 
     def discard_sandbox(self):
         """Descarta o sandbox atual."""

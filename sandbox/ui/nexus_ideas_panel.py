@@ -114,7 +114,7 @@ class NexusIdeasPanel(ctk.CTkFrame):
         from app.self_improvement.permission_manager import PermissionManager
         from app.self_improvement.sandbox_manager import SandboxManager
         from app.self_improvement.score_engine import ScoreEngine
-        from CTkMessagebox import CTkMessagebox
+        import tkinter.messagebox as messagebox
         import os, uuid, shutil
         pm = PermissionManager()
         ok = pm.ask_permission(
@@ -142,13 +142,19 @@ class NexusIdeasPanel(ctk.CTkFrame):
         # 3. validar no sandbox (rodar pytest)
         if not sandbox_mgr.validate_sandbox():
             sandbox_mgr.discard_sandbox()
-            CTkMessagebox(self, title="Falha nos testes", message="Os testes falharam no sandbox. Operação abortada.", icon="cancel")
+            messagebox.showerror("Falha nos testes", "Os testes falharam no sandbox. Operação abortada.")
             return
+            
         # 4. aplicar ao live
-        sandbox_mgr.apply_to_live()
+        try:
+            sandbox_mgr.apply_to_live()
+        except Exception as e:
+            messagebox.showerror("Erro ao aplicar", f"Falha ao mover sandbox para live: {e}")
+            return
+            
         # 5. atualizar score (optional)
         ScoreEngine(project_root).evaluate_system()
-        CTkMessagebox(self, title="Sucesso", message=f"Módulo '{idea['title']}' criado e aplicado.", icon="check")
+        messagebox.showinfo("Sucesso", f"Módulo '{idea['title']}' criado e aplicado.")
         # opcional: remover card
         card.destroy()
 
