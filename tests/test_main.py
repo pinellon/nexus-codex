@@ -19,8 +19,8 @@ class TestMain(unittest.TestCase):
         
         test_args = ['main.py', '--voice-demo']
         with patch.object(sys, 'argv', test_args):
-            from main import main
-            main()
+            import main  # Importando aqui para garantir que sys.argv seja atualizado corretamente
+            main.main()  # Chamando explicitamente main()
         
         mock_route.assert_called_once_with('comando de teste')
 
