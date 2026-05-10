@@ -9,42 +9,15 @@ from .web_researcher import WebResearcher
 from .code_editor import CodeEditor
 
 class NexusMind:
-    def __init__(self, api_key: str, auto_mode: bool = False, high_improvement: bool = False, ui_callback=None):
-        # Initialize OpenAI client
+    def __init__(self, api_key: str, auto_mode: bool = False, high_improvement: bool = False, ui_callback=None, restart_mgr=None):
         from openai import OpenAI
-        import logging
-        self.client = OpenAI(api_key=api_key)
-        # High improvement forces autonomous mode and shorter intervals
-        self.high_improvement = high_improvement
-        self.auto_mode = auto_mode or high_improvement
-        self.running = False
-        self.cycle_interval = 60 if high_improvement else 300  # seconds between cycles
-        # Initialize components
-        self.guard = GitGuard()
-        # SelfAnalyzer expects config and logger; provide empty config and self as logger
-        self.analyzer = SelfAnalyzer(config={}, logger=self)
-        self.researcher = WebResearcher()
-        self.editor = CodeEditor()
-        self.log = []
-        self.user_directive = None
-        from openai import OpenAI
-        import logging
-        # Initialize OpenAI client
-        self.client = OpenAI(api_key=api_key)
-        # High improvement forces autonomous mode and shorter intervals
-        self.high_improvement = high_improvement
-        self.auto_mode = auto_mode or high_improvement
-        self.running = False
-        self.cycle_interval = 60 if high_improvement else 300  # seconds between cycles
-        from openai import OpenAI
+        from app.self_improvement.file_tracker import FileTracker
         
-        # O usuário enviou código para usar Anthropic, mas como o sistema usa OpenAI nativamente,
-        # adaptarei para OpenAI, pois a chave da OpenAI já está disponível em settings_manager.
-        # Caso precise, o usuário pode configurar para Anthropic futuramente.
         self.client = OpenAI(api_key=api_key)
-        self.auto_mode = auto_mode  # True = autônomo, False = pede confirmação
+        self.high_improvement = high_improvement
+        self.auto_mode = auto_mode or high_improvement
         self.running = False
-        self.cycle_interval = 300  # segundos entre ciclos (5 min)
+        self.cycle_interval = 60 if high_improvement else 300
         
         self.guard = GitGuard()
         self.analyzer = SelfAnalyzer(config={}, logger=self)
@@ -52,6 +25,11 @@ class NexusMind:
         self.editor = CodeEditor()
         self.log = []
         self.user_directive = None
+        
+        self.ui_callback = ui_callback
+        self.last_modified_path = None
+        self.tracker = FileTracker()
+        self.restart_mgr = restart_mgr
     
     def start(self):
         self.running = True
@@ -71,7 +49,7 @@ class NexusMind:
                 self._log(f"❌ Erro no ciclo: {e}")
             time.sleep(self.cycle_interval)
     
-    def _run_one_cycle(self, user_prompt: str = None):
+    def _run_one_cycle(self, user_prompt: str = None, retry_count: int = 0, last_error: str = None):
         self._log("🔍 Iniciando ciclo de auto-consciência...")
         
         # 1. Snapshot e Sumário Estrutural
@@ -171,6 +149,9 @@ Retorne APENAS um JSON:
         
         if not success:
             self._log("❌ Falha ao aplicar mudança")
+            if retry_count < 2:
+                self._log("🔄 Retentando com feedback do erro...")
+                self._run_one_cycle(user_prompt, retry_count + 1, f"Falha ao gravar arquivo ou aplicar mudança em {path}.")
             return
         
         # 8. Valida (roda pytest se houver)
@@ -180,8 +161,12 @@ Retorne APENAS um JSON:
         )
         
         if test_result.returncode != 0 and "no tests ran" not in test_result.stdout:
+            error_msg = test_result.stdout
             self._log("❌ Testes falharam! Revertendo...")
             self.guard.rollback()
+            if retry_count < 2:
+                self._log("🔄 Retentando com feedback do erro dos testes...")
+                self._run_one_cycle(user_prompt, retry_count + 1, f"Falha nos testes:\n{error_msg}")
             return
         
         # 9. Commit da melhoria
@@ -195,6 +180,17 @@ Retorne APENAS um JSON:
         pow_instance = ProofOfWork()
         report = pow_instance.save_report()
         self._log(f"📋 Relatório salvo: {len(report.get('verifications', []))} verificações")
+
+        # 11. Registra arquivos tocados e verifica restart
+        changed = self.tracker.get_git_changed_files()
+        self.tracker.record_cycle(
+            files_changed=changed,
+            summary=plan.get('summary', 'Melhoria sem resumo')
+        )
+        
+        if self.restart_mgr and self.restart_mgr.needs_restart_after(changed):
+            self._log("⚠️ [NEXUS] Arquivos críticos modificados — solicitando reinício")
+            self.restart_mgr.request_restart(plan.get('summary', 'Atualização estrutural'))
     
     def _log(self, msg: str):
         entry = f"[{time.strftime('%H:%M:%S')}] {msg}"
