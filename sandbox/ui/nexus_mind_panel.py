@@ -21,6 +21,8 @@ class NexusMindPanel(ctk.CTkFrame):
 
 
     def _build_ui(self):
+        self.mind_settings = self._load_mind_settings()
+
         # Tabview
         self.tabview = ctk.CTkTabview(self, fg_color="transparent", text_color="#A6ACCD", segmented_button_selected_color="#1E1E2E", segmented_button_selected_hover_color="#313244")
         self.tabview.pack(fill="both", expand=True, padx=4, pady=4)
@@ -49,6 +51,17 @@ class NexusMindPanel(ctk.CTkFrame):
             progress_color="#00FFFF"
         )
         self.toggle_btn.pack(anchor="w", padx=16, pady=8)
+        
+        # Auto-Restart Switch
+        self.auto_restart_var = ctk.BooleanVar(value=self.mind_settings.get("auto_restart", False))
+        self.auto_restart_btn = ctk.CTkSwitch(
+            parent, text="Auto-Restart após mudanças críticas",
+            variable=self.auto_restart_var,
+            command=self._save_mind_settings,
+            font=("Courier", 11),
+            progress_color="#F9E2AF"
+        )
+        self.auto_restart_btn.pack(anchor="w", padx=16, pady=(0, 8))
 
         # Modo de operação
         ctk.CTkLabel(parent, text="Modo:", font=("Courier", 11)).pack(anchor="w", padx=16)
@@ -68,7 +81,11 @@ class NexusMindPanel(ctk.CTkFrame):
         ctk.CTkLabel(parent, text="Diretriz / Foco de melhoria:", font=("Courier", 11)).pack(anchor="w", padx=16, pady=(8,0))
         self.directive_entry = ctk.CTkEntry(parent, font=("Courier", 12), fg_color="#1E1E2E", placeholder_text="Ex: Melhore sua inteligência...", text_color="#A6ACCD")
         self.directive_entry.pack(fill="x", padx=16, pady=4)
-        self.directive_entry.bind("<KeyRelease>", self._update_directive)
+        if self.mind_settings.get("directive"):
+            self.directive_entry.insert(0, self.mind_settings["directive"])
+            self.mind.user_directive = self.mind_settings["directive"]
+            
+        self.directive_entry.bind("<KeyRelease>", self._on_directive_change)
 
         # Intervalo
         ctk.CTkLabel(parent, text="Intervalo entre ciclos (min):",
@@ -199,7 +216,36 @@ class NexusMindPanel(ctk.CTkFrame):
         import subprocess
         subprocess.Popen(f'explorer "{os.path.abspath(".")}"')
 
+    def _load_mind_settings(self):
+        import json, os
+        path = "data/mind_settings.json"
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except:
+                pass
+        return {"directive": "", "auto_restart": False}
+
+    def _save_mind_settings(self, event=None):
+        import json, os
+        path = "data/mind_settings.json"
+        os.makedirs("data", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({
+                "directive": self.directive_entry.get(),
+                "auto_restart": self.auto_restart_var.get()
+            }, f, ensure_ascii=False)
+
+    def _on_directive_change(self, event):
+        self._update_directive(event)
+        self._save_mind_settings()
+
     def _ask_restart(self, reason: str) -> bool:
+        if hasattr(self, 'auto_restart_var') and self.auto_restart_var.get():
+            self._log("🔄 Auto-Restart ativado. Reiniciando sem perguntar...")
+            return True
+            
         dialog = ctk.CTkToplevel(self)
         dialog.title("Nexus — Reinicialização Necessária")
         dialog.geometry("420x200")
