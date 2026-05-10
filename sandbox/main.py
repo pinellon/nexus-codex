@@ -16,6 +16,17 @@ from theme import main as ui_main
 VOICE_DEMO_MESSAGE = "NEXUS online. Modo demo de voz."
 EXIT_COMMANDS = {"sleep", "parar", "sair"}
 
+def handle_voice_commands(listener, speaker, router):
+    """Handles voice commands in a loop."""
+    while True:
+        text = listener.listen_once()
+        if text:
+            command = router.route(text)
+            print(f"OUVI: {text}")
+            print(f"ENTENDI: {command.label} {command.args}")
+            if command.intent in EXIT_COMMANDS:
+                break
+
 def run_voice_demo(settings, logger):
     listener = VoiceListener(settings=settings, logger=logger)
     speaker = VoiceSpeaker(settings=settings, logger=logger)
@@ -23,14 +34,7 @@ def run_voice_demo(settings, logger):
 
     speaker.speak(VOICE_DEMO_MESSAGE)
     try:
-        while True:
-            text = listener.listen_once()
-            if text:
-                command = router.route(text)
-                print(f"OUVI: {text}")
-                print(f"ENTENDI: {command.label} {command.args}")
-                if command.intent in EXIT_COMMANDS:
-                    break
+        handle_voice_commands(listener, speaker, router)
     finally:
         logger.close()
 
