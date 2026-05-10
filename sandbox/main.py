@@ -15,7 +15,6 @@ from theme import main as ui_main
 VOICE_DEMO_MESSAGE = "NEXUS online. Modo demo de voz."
 EXIT_COMMANDS = {"sleep", "parar", "sair"}
 
-
 def run_voice_demo(settings, logger):
     listener = VoiceListener(settings=settings, logger=logger)
     speaker = VoiceSpeaker(settings=settings, logger=logger)
@@ -34,28 +33,26 @@ def run_voice_demo(settings, logger):
     finally:
         logger.close()
 
-
 def parse_arguments():
     parser = argparse.ArgumentParser(prog="nexus")
     parser.add_argument("--voice-demo", action="store_true", help="roda loop de voz no terminal")
     return parser.parse_args()
-
 
 def setup_environment():
     settings = load_settings()
     logger = build_logger(settings.log_file)
     return settings, logger
 
-
-def main():
-    args = parse_arguments()
-    settings, logger = setup_environment()
-
+def execute_mode(args, settings, logger):
     if args.voice_demo:
         run_voice_demo(settings, logger)
     else:
         ui_main()
 
+def main():
+    args = parse_arguments()
+    settings, logger = setup_environment()
+    execute_mode(args, settings, logger)
 
 if __name__ == "__main__":
     main()
