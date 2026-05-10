@@ -42,7 +42,7 @@ class NexusMindPanel(ctk.CTkFrame):
                      font=("Courier", 16, "bold"), text_color="#00FFFF").pack(anchor="w", padx=16, pady=(16,4))
 
         # Toggle principal
-        self.toggle_var = ctk.BooleanVar(value=False)
+        self.toggle_var = ctk.BooleanVar(value=self.mind_settings.get("active", False))
         self.toggle_btn = ctk.CTkSwitch(
             parent, text="Ativar auto-melhoria",
             variable=self.toggle_var,
@@ -65,7 +65,7 @@ class NexusMindPanel(ctk.CTkFrame):
 
         # Modo de operação
         ctk.CTkLabel(parent, text="Modo:", font=("Courier", 11)).pack(anchor="w", padx=16)
-        self.mode_var = ctk.StringVar(value="supervisionado")
+        self.mode_var = ctk.StringVar(value=self.mind_settings.get("mode", "supervisionado"))
         mode_frame = ctk.CTkFrame(parent, fg_color="transparent")
         mode_frame.pack(fill="x", padx=16, pady=4)
         for mode in ["supervisionado", "autônomo", "agressivo"]:
@@ -95,7 +95,8 @@ class NexusMindPanel(ctk.CTkFrame):
             command=self._on_interval_change,
             button_color="#00FFFF", button_hover_color="#00CCCC"
         )
-        self.interval_slider.set(5)
+        self.interval_slider.set(self.mind_settings.get("interval", 5))
+        self.interval_slider.pack(fill="x", padx=16)
         self.interval_slider.pack(fill="x", padx=16)
 
         # Log
@@ -144,6 +145,12 @@ class NexusMindPanel(ctk.CTkFrame):
             font=("Courier", 12), width=120,
             fg_color="transparent", border_width=1
         ).pack(side="left")
+        
+        # Apply mode logic
+        self._on_mode_change()
+        
+        if self.toggle_var.get():
+            self.after(1000, self._on_toggle)
 
     def _refresh_files(self):
         """Atualiza a lista de arquivos modificados"""
@@ -234,7 +241,10 @@ class NexusMindPanel(ctk.CTkFrame):
         with open(path, "w", encoding="utf-8") as f:
             json.dump({
                 "directive": self.directive_entry.get(),
-                "auto_restart": self.auto_restart_var.get()
+                "auto_restart": self.auto_restart_var.get(),
+                "active": self.toggle_var.get(),
+                "mode": self.mode_var.get(),
+                "interval": self.interval_slider.get()
             }, f, ensure_ascii=False)
 
     def _on_directive_change(self, event):
@@ -355,6 +365,7 @@ class NexusMindPanel(ctk.CTkFrame):
         else:
             self.mind.stop()
             self._log("⏸ NexusMind pausado")
+        self._save_mind_settings()
 
     def _on_mode_change(self):
         mode = self.mode_var.get()
@@ -364,9 +375,11 @@ class NexusMindPanel(ctk.CTkFrame):
         else:
             self.mind.cycle_interval = int(self.interval_slider.get()) * 60
         self._log(f"→ Modo: {mode}")
+        self._save_mind_settings()
 
     def _on_interval_change(self, val):
         self.mind.cycle_interval = int(val) * 60
+        self._save_mind_settings()
 
     def _update_directive(self, event=None):
         texto = self.directive_entry.get().strip()
