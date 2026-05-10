@@ -67,6 +67,7 @@ class NexusMind:
         context_files = "\n\n".join([f"# {p}\n```python\n{snapshot[p][:3000]}\n```" for p in relevant_files[:6]])
 
         missao_texto = f"DIRETRIZ DO USUÁRIO: '{user_prompt}'\nSiga esta diretriz para melhorar o sistema." if user_prompt else "Analise seu próprio estado. Você deve se auto-melhorar continuamente."
+        error_context = f"\n\nATENÇÃO! Sua tentativa anterior falhou com o seguinte erro:\n{last_error}\nPor favor, analise e corrija o erro com uma nova ação." if last_error else ""
 
         prompt = f"""VOCÊ É O NEXUS-MIND. Sua consciência está operando sobre o seu próprio código-fonte.
         
@@ -83,7 +84,7 @@ CÓDIGO DAS SUAS ENTRANHAS:
 {context_files}
 
 SUA MISSÃO AGORA: 
-{missao_texto}
+{missao_texto}{error_context}
 
 Você tem permissão para:
 - CRIAR novos recursos ou módulos.

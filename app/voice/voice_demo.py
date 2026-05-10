@@ -1,3 +1,5 @@
+# app/voice/voice_demo.py
+
 from app.config import load_settings
 from app.logs.nexus_logger import build_logger
 from app.voice.listener import VoiceListener
@@ -11,17 +13,13 @@ def run_voice_demo():
     speaker = VoiceSpeaker(settings=settings, logger=logger)
     router = CommandRouter(settings=settings, logger=logger)
 
-    speaker.speak("NEXUS online. Modo demo de voz.")
+    speaker.speak('NEXUS online. Modo demo de voz.')
     while True:
-        try:
-            text = listener.listen_once()
-            if not text:
-                continue
-            command = router.route(text)
-            print(f"OUVI: {text}")
-            print(f"ENTENDI: {command.label} {command.args}")
-            if command.intent in {"sleep", "parar", "sair"}:
-                break
-        except Exception as e:
-            logger.error(f"Erro no loop de voz: {e}")
-            speaker.speak("Desculpe, ocorreu um erro. Por favor, tente novamente.")
+        text = listener.listen_once()
+        if not text:
+            continue
+        command = router.route(text)
+        print(f'OUVI: {text}')
+        print(f'ENTENDI: {command.label} {command.args}')
+        if command.intent in {'sleep', 'parar', 'sair'}:
+            break
