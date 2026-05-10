@@ -1,3 +1,5 @@
+# main.py
+
 """Launcher principal do NEXUS.
 
 Por padrao abre a interface visual. Use `python main.py --voice-demo` para
