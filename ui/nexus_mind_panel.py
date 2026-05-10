@@ -1,16 +1,24 @@
 import customtkinter as ctk
 import threading
+import os
 from app.self_improvement.nexus_mind import NexusMind
+from app.self_improvement.file_tracker import FileTracker
+from app.self_improvement.restart_manager import RestartManager
 
 class NexusMindPanel(ctk.CTkFrame):
     def __init__(self, master, settings, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.settings = settings
+        self.tracker = FileTracker()
+        self.restart_mgr = RestartManager(on_confirm_callback=self._ask_restart)
         self.mind = NexusMind(
             api_key=settings.get("openai_api_key", ""),
-            auto_mode=False
+            auto_mode=False,
+            restart_mgr=self.restart_mgr
         )
         self._build_ui()
+        self._refresh_files()
+
 
     def _build_ui(self):
         # Título
@@ -79,6 +87,151 @@ class NexusMindPanel(ctk.CTkFrame):
         ctk.CTkButton(btn_frame, text="Abrir Modificado", command=self._open_modified_file,
                       font=("Courier", 12), fg_color="transparent", text_color="#A6ACCD",
                       border_width=1, border_color="#A6ACCD", hover_color="#2E2E3E").pack(side="left", padx=4)
+
+        # ── DIVISOR ──────────────────────────────────────
+        ctk.CTkLabel(self, text="ARQUIVOS MODIFICADOS",
+                     font=("Courier", 11),
+                     text_color="#00BFBF").pack(anchor="w", padx=16, pady=(16, 4))
+
+        # Frame dos arquivos (lista scrollável)
+        self.files_frame = ctk.CTkScrollableFrame(self, height=180)
+        self.files_frame.pack(fill="x", padx=16, pady=(0, 8))
+
+        # Botões do painel de arquivos
+        btn_row_files = ctk.CTkFrame(self, fg_color="transparent")
+        btn_row_files.pack(fill="x", padx=16, pady=(0, 8))
+
+        ctk.CTkButton(
+            btn_row_files, text="Abrir Pasta do Projeto",
+            command=self._open_project_folder,
+            font=("Courier", 12), width=180
+        ).pack(side="left", padx=(0, 6))
+
+        ctk.CTkButton(
+            btn_row_files, text="Atualizar Lista",
+            command=self._refresh_files,
+            font=("Courier", 12), width=120,
+            fg_color="transparent", border_width=1
+        ).pack(side="left")
+
+    def _refresh_files(self):
+        """Atualiza a lista de arquivos modificados"""
+        for w in self.files_frame.winfo_children():
+            w.destroy()
+
+        files = self.tracker.get_git_changed_files()
+        history = self.tracker.history
+
+        if not files and not history:
+            ctk.CTkLabel(
+                self.files_frame,
+                text="Nenhuma modificacao registrada ainda.",
+                font=("Courier", 11),
+                text_color="gray"
+            ).pack(anchor="w", padx=8, pady=4)
+            return
+
+        for f in files:
+            self._add_file_row(f["path"], f["action"])
+
+        if history:
+            ctk.CTkLabel(
+                self.files_frame,
+                text=f"-- ciclos anteriores ({len(history)}) --",
+                font=("Courier", 10),
+                text_color="gray"
+            ).pack(anchor="w", padx=8, pady=(8, 2))
+
+            for entry in history[:5]:
+                ts = entry["timestamp"][11:16]
+                summary = entry["summary"][:60]
+                ctk.CTkLabel(
+                    self.files_frame,
+                    text=f"[{ts}] {summary}",
+                    font=("Courier", 10),
+                    text_color="gray"
+                ).pack(anchor="w", padx=8)
+
+    def _add_file_row(self, filepath: str, action: str):
+        colors = {"edit": "#00BFBF", "create": "#1D9E75", "delete": "#E24B4A"}
+        labels = {"edit": "EDIT", "create": "NEW", "delete": "DEL"}
+        color = colors.get(action, "gray")
+        label = labels.get(action, "?")
+
+        row = ctk.CTkFrame(self.files_frame, fg_color="transparent")
+        row.pack(fill="x", pady=2)
+
+        ctk.CTkLabel(row, text=label, font=("Courier", 10),
+                     text_color=color, width=36).pack(side="left")
+
+        ctk.CTkLabel(row, text=filepath, font=("Courier", 11),
+                     anchor="w").pack(side="left", fill="x", expand=True)
+
+        if os.path.exists(filepath):
+            ctk.CTkButton(
+                row, text="abrir", width=50,
+                font=("Courier", 10),
+                command=lambda p=filepath: self.tracker.open_file(p)
+            ).pack(side="right", padx=2)
+
+            ctk.CTkButton(
+                row, text="pasta", width=50,
+                font=("Courier", 10),
+                fg_color="transparent", border_width=1,
+                command=lambda p=filepath: self.tracker.open_in_explorer(p)
+            ).pack(side="right", padx=2)
+
+    def _open_project_folder(self):
+        import subprocess
+        subprocess.Popen(f'explorer "{os.path.abspath(".")}"')
+
+    def _ask_restart(self, reason: str) -> bool:
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Nexus — Reinicialização Necessária")
+        dialog.geometry("420x200")
+        dialog.grab_set()
+
+        ctk.CTkLabel(
+            dialog,
+            text="REINICIALIZACAO NECESSARIA",
+            font=("Courier", 13, "bold"),
+            text_color="#00BFBF"
+        ).pack(pady=(20, 8))
+
+        ctk.CTkLabel(
+            dialog,
+            text=f"Motivo: {reason[:80]}",
+            font=("Courier", 11),
+            wraplength=380
+        ).pack(padx=16)
+
+        ctk.CTkLabel(
+            dialog,
+            text="O Nexus precisa reiniciar para aplicar as mudancas.\nDeseja reiniciar agora?",
+            font=("Courier", 11),
+            text_color="gray"
+        ).pack(pady=8, padx=16)
+
+        result = {"confirmed": False}
+        btn_row = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_row.pack(pady=8)
+
+        def confirm():
+            result["confirmed"] = True
+            dialog.destroy()
+
+        def cancel():
+            dialog.destroy()
+
+        ctk.CTkButton(btn_row, text="Reiniciar Agora",
+                      command=confirm, font=("Courier", 12)).pack(side="left", padx=8)
+        ctk.CTkButton(btn_row, text="Depois",
+                      command=cancel, font=("Courier", 12),
+                      fg_color="transparent", border_width=1).pack(side="left")
+
+        dialog.wait_window()
+        return result["confirmed"]
+
 
 
     def _show_evidence(self):
