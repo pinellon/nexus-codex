@@ -10,10 +10,10 @@ import app.logs.nexus_logger
 import app.voice.listener
 import app.voice.speaker
 import app.core.command_router
+from app.chat.chat_engine import ChatEngine
 import theme
 
 VOICE_DEMO_MESSAGE = "NEXUS online. Modo demo de voz."
-EXIT_COMMANDS = {"sleep", "parar", "sair"}
 
 
 def handle_voice_commands(listener: app.voice.listener.VoiceListener, 
@@ -26,7 +26,7 @@ def handle_voice_commands(listener: app.voice.listener.VoiceListener,
             command = router.route(text)
             print(f"OUVI: {text}")
             print(f"ENTENDI: {command.label} {command.args}")
-            if command.intent in EXIT_COMMANDS:
+            if ChatEngine.is_exit_request(text, command, router=router):
                 break
 
 

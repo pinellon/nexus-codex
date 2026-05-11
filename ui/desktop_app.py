@@ -24,9 +24,16 @@ from app.vision.vision_panel import VisionPanel
 
 
 class NexusApp(ctk.CTk):
-    def __init__(self, on_command_callback):
+    def __init__(
+        self,
+        on_command_callback,
+        live_event_subscribe=None,
+        live_event_unsubscribe=None,
+    ):
         super().__init__()
         self._on_command = on_command_callback
+        self._live_event_subscribe = live_event_subscribe
+        self._live_event_unsubscribe = live_event_unsubscribe
         self._cfg = settings.load()
         self._active_tab = "chat"
         self._processing = False
@@ -37,10 +44,16 @@ class NexusApp(ctk.CTk):
         self._router = CommandRouter(self._cfg.get("wake_word", "nexus"))
         self._voice_loop = None
         self._voice_loop_active = False
+        self._module_status = {
+            "agent": "ocioso",
+            "vision": "ocioso",
+            "home": "ocioso",
+        }
         SoundBus.enabled = bool(self._cfg.get("ui_sounds", True))
 
         self._setup_window()
         self._build_layout()
+        self._bind_live_events()
         self._start_background_tasks()
 
     def _setup_window(self):
@@ -60,6 +73,20 @@ class NexusApp(ctk.CTk):
         self.bind("<Control-4>", lambda _e: self._switch_tab("config"))
         self.bind("<Control-5>", lambda _e: self._switch_tab("logs"))
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _bind_live_events(self):
+        if not self._live_event_subscribe:
+            self._live_event_listener = None
+            return
+
+        def _listener(kind: str, message: str, data: dict):
+            self.after(
+                0,
+                lambda k=kind, m=message, d=data: self._handle_live_event(k, m, d),
+            )
+
+        self._live_event_listener = _listener
+        self._live_event_subscribe(_listener)
 
     def _set_windows_app_id(self):
         if os.name != "nt":
@@ -295,6 +322,32 @@ class NexusApp(ctk.CTk):
         self._chat_scroll = ctk.CTkScrollableFrame(frame, fg_color=C["bg"], scrollbar_button_color=C["border"], scrollbar_button_hover_color=C["cyan"])
         self._chat_scroll.pack(fill="both", expand=True, padx=12, pady=(10, 0))
         self._add_system_msg(f"Sistema online. Como posso ajudar, {self._cfg.get('owner_name', 'Nicolas')}?")
+
+        info = tk.Frame(frame, bg=C["bg"])
+        info.pack(fill="x", padx=12, pady=(8, 0))
+        self._module_status_var = tk.StringVar()
+        self._module_hint_var = tk.StringVar(
+            value="Eventos ao vivo de agente, visao e casa aparecem aqui no chat."
+        )
+        tk.Label(
+            info,
+            textvariable=self._module_status_var,
+            bg=C["bg"],
+            fg=C["cyan"],
+            font=F["small"],
+            anchor="w",
+            justify="left",
+        ).pack(fill="x")
+        tk.Label(
+            info,
+            textvariable=self._module_hint_var,
+            bg=C["bg"],
+            fg=C["text_muted"],
+            font=F["tiny"],
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", pady=(2, 0))
+        self._refresh_module_status()
 
         wrap = tk.Frame(frame, bg=C["panel"])
         wrap.pack(fill="x", padx=12, pady=10)
@@ -715,6 +768,54 @@ class NexusApp(ctk.CTk):
             except Exception:
                 pass
 
+    def _handle_live_event(self, kind: str, message: str, data: dict | None = None):
+        if kind not in {"agent", "vision", "home", "error"}:
+            return
+
+        text = (message or "").strip()
+        if not text:
+            return
+
+        if kind in {"agent", "vision", "home"}:
+            label = {
+                "agent": "AGENTE",
+                "vision": "VISAO",
+                "home": "CASA",
+            }[kind]
+            rendered = text if text.startswith("[") else f"[{label}] {text}"
+            self._set_module_status(kind, text)
+            self._add_chat_message("assistant", rendered)
+            return
+
+        self._add_chat_message("assistant", text)
+        self._set_status("ERRO", C["error"])
+        show_toast(self, text[:80], "error", 2600)
+
+    def _set_module_status(self, kind: str, message: str):
+        if kind not in self._module_status:
+            return
+
+        lowered = message.lower()
+        if "erro" in lowered:
+            status = "erro"
+        elif any(token in lowered for token in ("conclu", "parado", "cancelad", "pronto")):
+            status = "ocioso"
+        else:
+            status = "ativo"
+
+        self._module_status[kind] = status
+        self._refresh_module_status()
+
+    def _refresh_module_status(self):
+        if hasattr(self, "_module_status_var"):
+            self._module_status_var.set(
+                "Modulos: "
+                f"agent {self._module_status['agent']} | "
+                f"visao {self._module_status['vision']} | "
+                f"casa {self._module_status['home']}"
+            )
+        self._update_footer_text()
+
     def _toggle_mic(self):
         if self._listening or self._processing:
             return
@@ -895,6 +996,35 @@ class NexusApp(ctk.CTk):
         try:
             if self._voice_loop:
                 self._voice_loop.stop()
+        except Exception:
+            pass
+        self.destroy()
+
+    def _update_footer_text(self):
+        if not hasattr(self, "_footer_left"):
+            return
+        owner = self._cfg.get("owner_name", "Nicolas")
+        voice = "voz ON" if self._voice_loop_active else "voz OFF"
+        active_modules = ",".join(
+            name for name, status in self._module_status.items() if status == "ativo"
+        ) or "nenhum"
+        self._footer_left.set(
+            f"NEXUS v2.1 | {owner} | {voice} | modulos {active_modules} | mensagens {self._message_count} | comandos {self._command_count}"
+        )
+        metrics = self._last_metrics
+        self._footer_right.set(
+            f"CPU {metrics['cpu']:.0f}% | RAM {metrics['ram']:.0f}% | DISCO {metrics['disk']:.0f}% | atualiza 2s"
+        )
+
+    def _on_close(self):
+        try:
+            if self._voice_loop:
+                self._voice_loop.stop()
+        except Exception:
+            pass
+        try:
+            if self._live_event_unsubscribe and self._live_event_listener:
+                self._live_event_unsubscribe(self._live_event_listener)
         except Exception:
             pass
         self.destroy()

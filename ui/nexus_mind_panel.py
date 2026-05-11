@@ -29,10 +29,15 @@ class NexusMindPanel(ctk.CTkFrame):
         
         self.tab_mind = self.tabview.add("Mente & Log")
         self.tab_ideas = self.tabview.add("Ideias & Módulos")
+        self.tab_plugins = self.tabview.add("Meus Módulos")
         
         from ui.nexus_ideas_panel import NexusIdeasPanel
         self.ideas_panel = NexusIdeasPanel(self.tab_ideas, self.settings)
         self.ideas_panel.pack(fill="both", expand=True)
+
+        from ui.nexus_plugins_panel import NexusPluginsPanel
+        self.plugins_panel = NexusPluginsPanel(self.tab_plugins, self.settings)
+        self.plugins_panel.pack(fill="both", expand=True)
         
         self._build_mind_tab(self.tab_mind)
 
@@ -97,7 +102,7 @@ class NexusMindPanel(ctk.CTkFrame):
         )
         self.interval_slider.set(self.mind_settings.get("interval", 5))
         self.interval_slider.pack(fill="x", padx=16)
-        self.interval_slider.pack(fill="x", padx=16)
+
 
         # Log
         ctk.CTkLabel(parent, text="LOG:", font=("Courier", 11), text_color="#00FFFF").pack(anchor="w", padx=16, pady=(12,2))

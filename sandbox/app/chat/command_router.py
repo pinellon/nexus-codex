@@ -1,16 +1,18 @@
-# command_router.py
+from __future__ import annotations
 
-from app.core.command_router import CommandRouter as BaseCommandRouter
+from app.core.command_router import Command, CommandRouter as BaseCommandRouter
+from app.core.text_utils import normalize_text, remove_wake_word
+
 
 class ChatCommandRouter(BaseCommandRouter):
-    def route(self, text: str):
-        """Roteia comandos de texto para respostas adequadas."""
-        if 'ajuda' in text.lower():
-            return self._create_command('ajuda', 'Fornecendo ajuda...', [])
-        elif 'olá' in text.lower() or 'oi' in text.lower():
-            return self._create_command('saudação', 'Olá! Como posso ajudar?', [])
-        else:
-            return self._create_command('desconhecido', 'Desculpe, não entendi.', [])
+    """Thin chat wrapper around the central CommandRouter."""
 
-    def _create_command(self, intent, label, args):
-        return type('Command', (), {'intent': intent, 'label': label, 'args': args})()
+    EXIT_WORDS = frozenset({"sair", "parar", "sleep", "exit", "quit"})
+
+    def is_exit_command(self, text: str, command: Command | None = None) -> bool:
+        normalized = normalize_text(text)
+        if command and command.intent in self.EXIT_WORDS:
+            return True
+
+        stripped = remove_wake_word(normalized, self.wake_word) or normalized
+        return stripped in self.EXIT_WORDS

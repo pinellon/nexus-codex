@@ -1,24 +1,27 @@
-# app/chat/chat_module.py
+from __future__ import annotations
+
+from app.chat.chat_engine import ChatEngine
+from app.chat.chat_interface import ChatInterface
+
 
 class ChatModule:
-    def __init__(self, settings, logger):
+    def __init__(self, settings, logger, engine: ChatEngine | None = None):
         self.settings = settings
         self.logger = logger
+        self.engine = engine or ChatEngine(settings=settings, logger=logger)
 
     def start_chat_session(self):
         self.logger.info("Chat session started.")
-        print("Bem-vindo ao Nexus Chat. Digite 'sair' para encerrar.")
-        while True:
-            try:
-                user_input = input("Você: ")
-                if user_input.lower() in {'sair', 'exit', 'quit'}:
-                    print("Sessão de chat encerrada.")
-                    break
-                response = self.generate_response(user_input)
-                print(f"Nexus: {response}")
-            except Exception as e:
-                self.logger.error(f"Erro durante a execução do loop de chat: {str(e)}")
+        ChatInterface(
+            settings=self.settings,
+            logger=self.logger,
+            engine=self.engine,
+        ).start_chat()
 
-    def generate_response(self, user_input):
-        # Lógica simulada para resposta de chat, a ser expandida.
-        return "Eu ainda estou aprendendo a responder adequadamente."
+    def generate_response(self, user_input, confirm_callback=None):
+        result = self.engine.process_input(
+            user_input,
+            speak=False,
+            confirm_callback=confirm_callback,
+        )
+        return result["response"]

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -45,6 +46,7 @@ _session_recorder = SessionRecorder(ROOT / "data" / "session_events.jsonl")
 _agent_handler: AgentCommandHandler | None = None
 _vision_handler: VisionCommandHandler | None = None
 _home_handler: HomeCommandHandler | None = None
+_live_event_listeners: list[Callable[[str, str, dict], None]] = []
 
 
 def _confirm_if_needed(intent_name: str, params: dict | None, confirm_callback) -> str | None:
@@ -120,10 +122,33 @@ def _processar_comando_core(texto: str, confirm_callback=None) -> str:
 
 
 def _record_event(kind: str, message: str, **data) -> None:
+    event_data = dict(data)
     try:
-        _session_recorder.record(kind, message, **data)
+        event = _session_recorder.record(kind, message, **event_data)
+        event_data.setdefault("timestamp", event.timestamp)
     except Exception:
         pass
+    _emit_live_event(kind, message, event_data)
+
+
+def subscribe_live_event(listener: Callable[[str, str, dict], None]) -> None:
+    if listener not in _live_event_listeners:
+        _live_event_listeners.append(listener)
+
+
+def unsubscribe_live_event(listener: Callable[[str, str, dict], None]) -> None:
+    try:
+        _live_event_listeners.remove(listener)
+    except ValueError:
+        pass
+
+
+def _emit_live_event(kind: str, message: str, data: dict) -> None:
+    for listener in list(_live_event_listeners):
+        try:
+            listener(kind, message, dict(data))
+        except Exception:
+            continue
 
 
 def _processar_recursos_inteligentes(texto: str, confirm_callback=None) -> str:
@@ -423,7 +448,11 @@ def main():
         print("        Configure o arquivo .env com sua chave da OpenAI.")
 
     from ui.desktop_app import NexusApp
-    app = NexusApp(on_command_callback=processar_comando)
+    app = NexusApp(
+        on_command_callback=processar_comando,
+        live_event_subscribe=subscribe_live_event,
+        live_event_unsubscribe=unsubscribe_live_event,
+    )
     log_action("Interface iniciada.")
     app.run()
 
