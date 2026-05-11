@@ -4,7 +4,6 @@ import unittest
 from unittest.mock import patch, MagicMock
 import sys
 
-
 class TestMain(unittest.TestCase):
 
     @patch('app.config.load_settings', return_value=MagicMock())
@@ -23,6 +22,11 @@ class TestMain(unittest.TestCase):
         # Argumentos para simular execução
         test_args = ['main.py', '--voice-demo']
         with patch.object(sys, 'argv', test_args):
+            # Importação condicional dentro do contexto para evitar conflitos
+            try:
+                del sys.modules['main']
+            except KeyError:
+                pass
             import main  # Importação dentro do contexto de patch
             main.main()  # Execução do método principal
         
