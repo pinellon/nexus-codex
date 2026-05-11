@@ -5,18 +5,20 @@
 from __future__ import annotations
 
 import argparse
-
-from app.config import load_settings
-from app.logs.nexus_logger import build_logger
-from app.voice.listener import VoiceListener
-from app.voice.speaker import VoiceSpeaker
-from app.core.command_router import CommandRouter
-from theme import main as ui_main
+import app.config
+import app.logs.nexus_logger
+import app.voice.listener
+import app.voice.speaker
+import app.core.command_router
+import theme
 
 VOICE_DEMO_MESSAGE = "NEXUS online. Modo demo de voz."
 EXIT_COMMANDS = {"sleep", "parar", "sair"}
 
-def handle_voice_commands(listener, speaker, router):
+
+def handle_voice_commands(listener: app.voice.listener.VoiceListener, 
+                          speaker: app.voice.speaker.VoiceSpeaker, 
+                          router: app.core.command_router.CommandRouter):
     """Handles voice commands in a loop."""
     while True:
         text = listener.listen_once()
@@ -27,10 +29,11 @@ def handle_voice_commands(listener, speaker, router):
             if command.intent in EXIT_COMMANDS:
                 break
 
-def run_voice_demo(settings, logger):
-    listener = VoiceListener(settings=settings, logger=logger)
-    speaker = VoiceSpeaker(settings=settings, logger=logger)
-    router = CommandRouter(settings=settings, logger=logger)
+
+def run_voice_demo(settings: app.config.Settings, logger: app.logs.nexus_logger.Logger):
+    listener = app.voice.listener.VoiceListener(settings=settings, logger=logger)
+    speaker = app.voice.speaker.VoiceSpeaker(settings=settings, logger=logger)
+    router = app.core.command_router.CommandRouter(settings=settings, logger=logger)
 
     speaker.speak(VOICE_DEMO_MESSAGE)
     try:
@@ -39,23 +42,23 @@ def run_voice_demo(settings, logger):
         logger.close()
 
 
-def parse_arguments():
+def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="nexus")
     parser.add_argument("--voice-demo", action="store_true", help="roda loop de voz no terminal")
     return parser.parse_args()
 
 
-def setup_environment():
-    settings = load_settings()
-    logger = build_logger(settings.log_file)
+def setup_environment() -> tuple[app.config.Settings, app.logs.nexus_logger.Logger]:
+    settings = app.config.load_settings()
+    logger = app.logs.nexus_logger.build_logger(settings.log_file)
     return settings, logger
 
 
-def execute_mode(args, settings, logger):
+def execute_mode(args: argparse.Namespace, settings: app.config.Settings, logger: app.logs.nexus_logger.Logger):
     if args.voice_demo:
         run_voice_demo(settings, logger)
     else:
-        ui_main()
+        theme.main()
 
 
 def main():

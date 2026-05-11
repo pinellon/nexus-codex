@@ -281,10 +281,12 @@ class NexusIdeasPanel(ctk.CTkFrame):
         )
         if not ok:
             return
+
         # 1. criar sandbox
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         sandbox_mgr = SandboxManager(project_root)
         sandbox_dir = sandbox_mgr.create_sandbox()
+
         # 2. gerar arquivos de módulo dentro do sandbox
         module_name = idea['name'].lower().replace(' ', '_').replace('—', '').replace('-', '_')
         module_path = os.path.join(sandbox_dir, "app", module_name)
