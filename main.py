@@ -1,19 +1,17 @@
-import argparse  # Utilizado para a análise dos argumentos da linha de comando
-import app.config  # Configurações de aplicação e carregamento
-import app.logs.nexus_logger  # Sistema de log responsável por capturar e armazenar eventos
-import app.voice.listener  # Módulo para capturar comandos de voz do usuário
-import app.voice.speaker  # Módulo para simular ações de fala do sistema
-import app.core.command_router  # Encaminhamento dos comandos capturados para ações correspondentes
-from app.chat.chat_engine import ChatEngine  # Mecanismo de chat usado para processar e responder comandos
-import theme  # Gerenciador de temas visuais (interface gráfica)
+import argparse
+from app.config import load_settings
+from app.logs.nexus_logger import build_logger
+from app.voice.listener import VoiceListener
+from app.voice.speaker import VoiceSpeaker
+from app.core.command_router import CommandRouter
+from app.chat.chat_engine import ChatEngine
+import theme
 
 # Constante de inicialização da aplicação.
 VOICE_DEMO_MESSAGE = "NEXUS online. Modo demo de voz."
 
 
-def handle_voice_commands(listener: app.voice.listener.VoiceListener, 
-                          speaker: app.voice.speaker.VoiceSpeaker, 
-                          router: app.core.command_router.CommandRouter):
+def handle_voice_commands(listener: VoiceListener, speaker: VoiceSpeaker, router: CommandRouter):
     """Handles voice commands in a loop."""
     while True:
         text = listener.listen_once()
@@ -25,11 +23,11 @@ def handle_voice_commands(listener: app.voice.listener.VoiceListener,
                 break
 
 
-def run_voice_demo(settings: app.config.Settings, logger: app.logs.nexus_logger.Logger):
+def run_voice_demo(settings, logger):
     """Execução do modo demo de voz, inicializa os componentes principais do sistema de voz."""
-    listener = app.voice.listener.VoiceListener(settings=settings, logger=logger)
-    speaker = app.voice.speaker.VoiceSpeaker(settings=settings, logger=logger)
-    router = app.core.command_router.CommandRouter(settings=settings, logger=logger)
+    listener = VoiceListener(settings=settings, logger=logger)
+    speaker = VoiceSpeaker(settings=settings, logger=logger)
+    router = CommandRouter(settings=settings, logger=logger)
 
     speaker.speak(VOICE_DEMO_MESSAGE)
     try:
@@ -45,14 +43,14 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def setup_environment() -> tuple[app.config.Settings, app.logs.nexus_logger.Logger]:
+def setup_environment() -> tuple:
     """Carrega as configurações e inicia o subsistema de logging."""
-    settings = app.config.load_settings()
-    logger = app.logs.nexus_logger.build_logger(settings.log_file)
+    settings = load_settings()
+    logger = build_logger(settings.log_file)
     return settings, logger
 
 
-def execute_mode(args: argparse.Namespace, settings: app.config.Settings, logger: app.logs.nexus_logger.Logger):
+def execute_mode(args: argparse.Namespace, settings, logger):
     """Seleciona e executa o modo de operação com base nos argumentos fornecidos."""
     if args.voice_demo:
         run_voice_demo(settings, logger)
