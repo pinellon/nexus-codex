@@ -1,1 +1,0 @@
-"""Nucleo operacional do NEXUS."""
