@@ -1,3 +1,5 @@
+# main.py
+
 import argparse
 from app.config import load_settings
 from app.logs.nexus_logger import build_logger
