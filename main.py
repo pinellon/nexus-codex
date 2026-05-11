@@ -1,10 +1,3 @@
-# main.py
-
-"Launcher principal do NEXUS."
-
-# Importações principais dos módulos utilizados no NEXUS.
-from __future__ import annotations
-
 import argparse  # Utilizado para a análise dos argumentos da linha de comando
 import app.config  # Configurações de aplicação e carregamento
 import app.logs.nexus_logger  # Sistema de log responsável por capturar e armazenar eventos
