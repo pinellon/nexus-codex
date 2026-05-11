@@ -1,0 +1,100 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --bg: 7 15 24;
+  --panel: 11 24 37;
+  --elevated: 14 33 48;
+  --line: 94 130 152;
+  --text: 235 245 255;
+  --muted: 147 167 186;
+  --accent-cyan: 56 218 255;
+  --accent-amber: 255 191 71;
+  --accent-lime: 120 242 146;
+  --accent-orange: 255 136 62;
+  --accent-rose: 255 110 128;
+  --accent-sky: 102 192 255;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  color: rgb(var(--text));
+  background:
+    radial-gradient(circle at top left, rgba(56, 218, 255, 0.18), transparent 32%),
+    radial-gradient(circle at top right, rgba(255, 191, 71, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(9, 18, 29, 1), rgba(5, 10, 18, 1));
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(circle at center, black, transparent 78%);
+}
+
+::selection {
+  background: rgba(56, 218, 255, 0.26);
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(7, 15, 24, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(56, 218, 255, 0.28);
+  border-radius: 999px;
+}
+
+.glass-outline {
+  position: relative;
+}
+
+.glass-outline::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(56, 218, 255, 0.45), rgba(255, 191, 71, 0.08));
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.scanline {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 45%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(56, 218, 255, 0.88), transparent);
+  filter: blur(0.4px);
+}

@@ -48,6 +48,17 @@ Modo demo de voz:
 python main.py --voice-demo
 ```
 
+Nova interface web:
+
+```powershell
+python main.py --web-api --host 127.0.0.1 --port 8000
+cd frontend
+cmd /c npm install
+cmd /c npm run dev
+```
+
+A interface desktop em CustomTkinter continua disponivel. A nova shell web usa uma base visual orientada a Magic UI e consome a API Python em `app/web/server.py`.
+
 ## Comandos de voz uteis
 
 ```text
@@ -104,6 +115,8 @@ Nexus, acordar
 - `app/home/`: automacao residencial via Home Assistant e controle Spotify.
 - `app/plugins/`: base para comandos externos sem mexer no nucleo.
 - `main.py`: launcher da UI e modo `--voice-demo`.
+- `app/web/server.py`: API HTTP para a nova interface web.
+- `frontend/`: shell web em React/Tailwind para a migracao da interface.
 - `ui_coding/coder_panel.py`: painel visual da aba Coder.
 
 ## Ideias futuras

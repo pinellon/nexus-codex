@@ -1,15 +1,16 @@
 # main.py
 
 import argparse
+
+from app.chat.chat_engine import ChatEngine
 from app.config import load_settings
+from app.core.command_router import CommandRouter
 from app.logs.nexus_logger import build_logger
 from app.voice.listener import VoiceListener
 from app.voice.speaker import VoiceSpeaker
-from app.core.command_router import CommandRouter
-from app.chat.chat_engine import ChatEngine
 import theme
 
-# Constante de inicialização da aplicação.
+# Constante de inicializacao da aplicacao.
 VOICE_DEMO_MESSAGE = "NEXUS online. Modo demo de voz."
 
 
@@ -26,7 +27,7 @@ def handle_voice_commands(listener: VoiceListener, speaker: VoiceSpeaker, router
 
 
 def run_voice_demo(settings, logger):
-    """Execução do modo demo de voz, inicializa os componentes principais do sistema de voz."""
+    """Executa o modo demo de voz no terminal."""
     listener = VoiceListener(settings=settings, logger=logger)
     speaker = VoiceSpeaker(settings=settings, logger=logger)
     router = CommandRouter(settings=settings, logger=logger)
@@ -39,22 +40,29 @@ def run_voice_demo(settings, logger):
 
 
 def parse_arguments() -> argparse.Namespace:
-    """Análise dos argumentos CLI fornecidos na execução do script."""
+    """Analisa os argumentos CLI fornecidos na execucao do script."""
     parser = argparse.ArgumentParser(prog="nexus")
     parser.add_argument("--voice-demo", action="store_true", help="roda loop de voz no terminal")
+    parser.add_argument("--web-api", action="store_true", help="roda a API HTTP da nova interface web")
+    parser.add_argument("--host", default="127.0.0.1", help="host usado pela API web")
+    parser.add_argument("--port", type=int, default=8000, help="porta usada pela API web")
     return parser.parse_args()
 
 
 def setup_environment() -> tuple:
-    """Carrega as configurações e inicia o subsistema de logging."""
+    """Carrega as configuracoes e inicia o subsistema de logging."""
     settings = load_settings()
     logger = build_logger(settings.log_file)
     return settings, logger
 
 
 def execute_mode(args: argparse.Namespace, settings, logger):
-    """Seleciona e executa o modo de operação com base nos argumentos fornecidos."""
-    if args.voice_demo:
+    """Seleciona e executa o modo de operacao com base nos argumentos fornecidos."""
+    if args.web_api:
+        from app.web.server import run as run_web_api
+
+        run_web_api(host=args.host, port=args.port)
+    elif args.voice_demo:
         run_voice_demo(settings, logger)
     else:
         theme.main()
