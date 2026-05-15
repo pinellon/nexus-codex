@@ -28,6 +28,15 @@ def test_smart_feature_routes():
     assert events.intent == "session_summary"
 
 
+def test_presentation_mode_accepts_accented_alias():
+    router = CommandRouter("nexus")
+
+    presentation = router.route("nexus modo apresentação")
+
+    assert presentation.intent == "run_template"
+    assert presentation.args["template"] == "modo_apresentacao"
+
+
 def test_vision_routes():
     router = CommandRouter("nexus")
 
@@ -38,6 +47,16 @@ def test_vision_routes():
     code = router.route("nexus analisa o codigo na tela")
     assert code.domain == "vision"
     assert code.args["intent"] == "analyze_code"
+
+
+def test_finance_route_detects_expense():
+    router = CommandRouter("nexus")
+
+    command = router.route("nexus gastei 35 reais com lanche")
+
+    assert command.domain == "finance"
+    assert command.intent == "finance_add_expense"
+    assert command.args["amount"] == 35.0
 
 
 def test_dangerous_confirmation_can_cancel():

@@ -87,8 +87,14 @@ body::after {
 .shell-root {
   min-height: 100vh;
   background:
-    radial-gradient(circle at 50% 20%, rgba(33, 132, 167, 0.1), transparent 20%),
-    linear-gradient(180deg, rgba(4, 9, 20, 0.98), rgba(6, 10, 20, 1));
+    radial-gradient(circle at 18% 18%, rgba(34, 211, 238, 0.12), transparent 22%),
+    radial-gradient(circle at 82% 100%, rgba(139, 92, 246, 0.1), transparent 26%),
+    linear-gradient(180deg, rgba(7, 10, 18, 0.98), rgba(10, 14, 26, 1));
+}
+
+.shell-display {
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  letter-spacing: -0.03em;
 }
 
 .shell-sidebar {
@@ -96,30 +102,91 @@ body::after {
   left: 0;
   top: 0;
   z-index: 40;
-  display: flex;
   height: 100vh;
-  width: 84px;
+  width: 280px;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  background:
+    linear-gradient(180deg, rgba(7, 10, 18, 0.94), rgba(9, 14, 25, 0.9)),
+    rgba(13, 18, 32, 0.84);
+  backdrop-filter: blur(24px);
+}
+
+.shell-sidebar-scroll {
+  display: flex;
+  height: 100%;
   flex-direction: column;
-  justify-content: space-between;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(6, 11, 22, 0.84);
-  padding: 22px 0 18px;
-  backdrop-filter: blur(18px);
+  gap: 1.25rem;
+  padding: 1.4rem 1rem 1.1rem;
+}
+
+.shell-sidebar-brand {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 1rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.shell-sidebar-brand-mark {
+  display: inline-flex;
+  height: 42px;
+  width: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.18), rgba(139, 92, 246, 0.16));
+  color: rgb(var(--text));
+  box-shadow: 0 12px 28px rgba(34, 211, 238, 0.16);
+}
+
+.shell-sidebar-summary {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.shell-sidebar-nav {
+  display: grid;
+  flex: 1;
+  gap: 1rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+}
+
+.shell-sidebar-section {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.shell-sidebar-heading {
+  margin: 0;
+  padding-left: 0.3rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.72);
+}
+
+.shell-sidebar-list {
+  display: grid;
+  gap: 0.4rem;
 }
 
 .shell-nav-button {
   position: relative;
-  margin: 0 auto;
   display: flex;
-  height: 44px;
-  width: 44px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 14px;
-  color: rgba(233, 238, 245, 0.84);
+  width: 100%;
+  align-items: flex-start;
+  gap: 0.9rem;
+  border-radius: 20px;
+  padding: 0.9rem 0.95rem;
+  color: rgba(226, 232, 240, 0.88);
+  text-align: left;
   transition:
     color 0.2s ease,
     background-color 0.2s ease,
+    border-color 0.2s ease,
     transform 0.2s ease;
 }
 
@@ -131,28 +198,711 @@ body::after {
 
 .shell-nav-line {
   position: absolute;
-  left: -11px;
-  top: 10px;
-  height: 24px;
+  left: -1px;
+  top: 18px;
+  height: 28px;
   width: 2px;
   border-radius: 999px;
   background: transparent;
 }
 
-.shell-nav-button-active .shell-nav-line {
-  background: linear-gradient(180deg, rgba(55, 228, 255, 1), rgba(38, 153, 184, 0.3));
-  box-shadow: 0 0 14px rgba(55, 228, 255, 0.5);
+.shell-nav-icon {
+  display: inline-flex;
+  height: 38px;
+  width: 38px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.shell-nav-copy {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.shell-nav-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+}
+
+.shell-nav-description {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(148, 163, 184, 0.9);
 }
 
 .shell-nav-button-active {
   color: rgba(84, 216, 255, 1);
+  background: linear-gradient(180deg, rgba(13, 24, 36, 0.92), rgba(11, 19, 34, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 12px 28px rgba(3, 8, 18, 0.22);
+}
+
+.shell-nav-button-active .shell-nav-line {
+  background: linear-gradient(180deg, rgba(55, 228, 255, 1), rgba(139, 92, 246, 0.35));
+  box-shadow: 0 0 14px rgba(55, 228, 255, 0.42);
+}
+
+.shell-nav-button-active .shell-nav-icon {
+  border-color: rgba(84, 216, 255, 0.22);
+  background: rgba(84, 216, 255, 0.08);
+}
+
+.shell-sidebar-footer {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.shell-sidebar-utility {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.82rem 0.9rem;
+  font-size: 13px;
+  color: rgba(226, 232, 240, 0.9);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.shell-sidebar-utility:hover {
+  border-color: rgba(84, 216, 255, 0.24);
+  background: rgba(84, 216, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.shell-sidebar-utility kbd,
+.shell-topbar-action kbd,
+.shell-command-search kbd {
+  margin-left: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.28rem 0.5rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: rgba(191, 201, 216, 0.88);
 }
 
 .shell-main {
   position: relative;
-  margin-left: 84px;
+  margin-left: 280px;
   min-height: 100vh;
   overflow-x: clip;
+}
+
+.shell-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(7, 10, 18, 0.74);
+  padding: 1.5rem 1.5rem 1.3rem;
+  backdrop-filter: blur(24px);
+}
+
+.shell-topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.7rem;
+}
+
+.shell-topbar-signal-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.shell-mini-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.45rem 0.68rem;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(191, 201, 216, 0.88);
+}
+
+.shell-mini-badge-dot {
+  height: 7px;
+  width: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.shell-mini-badge-label {
+  color: rgba(148, 163, 184, 0.86);
+}
+
+.shell-mini-badge-value {
+  color: white;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.shell-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.7rem 0.9rem;
+}
+
+.shell-status-dot {
+  height: 8px;
+  width: 8px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+}
+
+.shell-status-copy {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.shell-status-label {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.84);
+}
+
+.shell-status-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgb(var(--text));
+}
+
+.shell-topbar-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.76rem 0.95rem;
+  font-size: 13px;
+  color: rgba(226, 232, 240, 0.9);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.shell-topbar-action:hover {
+  border-color: rgba(84, 216, 255, 0.24);
+  background: rgba(84, 216, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.shell-topbar-action-primary {
+  background: linear-gradient(180deg, rgba(16, 31, 47, 0.94), rgba(12, 24, 36, 0.94));
+}
+
+.shell-viewport {
+  position: relative;
+  min-height: calc(100vh - 110px);
+}
+
+.shell-metric-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(16, 22, 38, 0.9), rgba(11, 16, 28, 0.88));
+  padding: 1.15rem 1.2rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 52px rgba(0, 0, 0, 0.2);
+}
+
+.shell-empty-state {
+  display: flex;
+  min-height: 220px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 1.25rem;
+}
+
+.shell-timeline {
+  position: relative;
+  display: grid;
+  gap: 1rem;
+}
+
+.shell-timeline::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(84, 216, 255, 0.18), rgba(255, 255, 255, 0.04));
+}
+
+.shell-timeline-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.shell-timeline-dot {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.35rem;
+  height: 10px;
+  width: 10px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+}
+
+.shell-timeline-content {
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.95rem 1rem;
+}
+
+.shell-command-fab {
+  position: fixed;
+  bottom: 1.5rem;
+  left: calc(280px + 1.5rem);
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(84, 216, 255, 0.2);
+  background: linear-gradient(180deg, rgba(16, 31, 47, 0.94), rgba(11, 22, 34, 0.94));
+  padding: 0.85rem 1rem;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(220, 246, 255, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 18px 44px rgba(0, 0, 0, 0.28),
+    0 0 28px rgba(84, 216, 255, 0.1);
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.shell-command-fab:hover {
+  transform: translateY(-2px);
+  border-color: rgba(84, 216, 255, 0.3);
+  background: linear-gradient(180deg, rgba(22, 44, 63, 0.96), rgba(12, 26, 40, 0.96));
+}
+
+.shell-boot-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background:
+    radial-gradient(circle at 22% 22%, rgba(34, 211, 238, 0.13), transparent 18%),
+    radial-gradient(circle at 78% 72%, rgba(139, 92, 246, 0.14), transparent 24%),
+    linear-gradient(180deg, rgba(7, 10, 18, 1), rgba(10, 14, 26, 1));
+}
+
+.shell-boot-grid {
+  display: grid;
+  align-items: center;
+  gap: 2rem;
+  width: min(1100px, 100%);
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+}
+
+.shell-boot-copy {
+  padding-right: 1rem;
+}
+
+.shell-boot-step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: rgba(148, 163, 184, 0.84);
+  transition: color 0.2s ease;
+}
+
+.shell-boot-step-active {
+  color: rgba(236, 242, 248, 0.96);
+}
+
+.shell-boot-step-dot {
+  height: 10px;
+  width: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.shell-boot-step-dot-live {
+  background: rgba(84, 216, 255, 0.9);
+  box-shadow: 0 0 18px rgba(84, 216, 255, 0.42);
+}
+
+.shell-boot-orb-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shell-boot-orb-core {
+  position: relative;
+  display: flex;
+  height: 320px;
+  width: 320px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at center, rgba(84, 216, 255, 0.18), transparent 42%),
+    radial-gradient(circle at center, rgba(13, 18, 32, 0.92), rgba(7, 10, 18, 0.92));
+  box-shadow:
+    inset 0 0 60px rgba(84, 216, 255, 0.1),
+    0 30px 80px rgba(0, 0, 0, 0.34),
+    0 0 72px rgba(84, 216, 255, 0.12);
+}
+
+.shell-boot-orb-ring,
+.shell-boot-orb-pulse {
+  position: absolute;
+  border-radius: 999px;
+}
+
+.shell-boot-orb-ring {
+  inset: 12%;
+  border: 1px solid rgba(84, 216, 255, 0.16);
+}
+
+.shell-boot-orb-ring-a {
+  border-style: solid;
+}
+
+.shell-boot-orb-ring-b {
+  inset: 22%;
+  border-style: dashed;
+  border-color: rgba(139, 92, 246, 0.24);
+}
+
+.shell-boot-orb-pulse {
+  inset: 26%;
+  background: radial-gradient(circle at center, rgba(84, 216, 255, 0.34), rgba(84, 216, 255, 0.08) 52%, transparent 72%);
+  filter: blur(10px);
+}
+
+.nexus-flow-shell {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 32px;
+  background:
+    linear-gradient(180deg, rgba(16, 22, 38, 0.94), rgba(10, 15, 28, 0.94)),
+    rgba(13, 18, 32, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 24px 64px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+.nexus-flow-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 1.35rem 1.35rem 1.1rem;
+}
+
+.nexus-flow-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.78rem 0.95rem;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.92);
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.nexus-flow-toolbar-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(84, 216, 255, 0.24);
+  background: rgba(84, 216, 255, 0.08);
+}
+
+.nexus-flow-toolbar-button-primary {
+  border-color: rgba(34, 211, 238, 0.2);
+  background: linear-gradient(180deg, rgba(16, 31, 47, 0.94), rgba(10, 24, 36, 0.94));
+  color: rgba(220, 246, 255, 0.94);
+}
+
+.nexus-flow-feedback-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 1.35rem 0;
+}
+
+.nexus-flow-canvas {
+  height: 720px;
+  padding: 1rem 1rem 1rem;
+}
+
+.nexus-flow-react {
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.06), transparent 20%),
+    radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.08), transparent 24%),
+    rgba(7, 10, 18, 0.94);
+}
+
+.nexus-flow-react .react-flow__panel {
+  margin: 16px;
+}
+
+.nexus-flow-react .react-flow__controls-button {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  color: rgba(226, 232, 240, 0.92) !important;
+}
+
+.nexus-flow-react .react-flow__controls-button:last-child {
+  border-bottom: 0 !important;
+}
+
+.nexus-flow-react .react-flow__controls-button:hover {
+  background: rgba(84, 216, 255, 0.08) !important;
+}
+
+.nexus-flow-react .react-flow__background path {
+  opacity: 0.55;
+}
+
+.nexus-flow-node-card {
+  width: 300px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(180deg, rgba(19, 26, 43, 0.96), rgba(12, 17, 30, 0.96)),
+    rgba(255, 255, 255, 0.04);
+  padding: 1rem;
+  backdrop-filter: blur(18px);
+}
+
+.nexus-flow-node-card .react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border-width: 1px;
+}
+
+.nexus-flow-panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(16, 22, 38, 0.88), rgba(11, 16, 28, 0.9)),
+    rgba(255, 255, 255, 0.03);
+  padding: 1.2rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 48px rgba(0, 0, 0, 0.2);
+}
+
+.nexus-flow-step-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: start;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.9rem 0.95rem;
+}
+
+.nexus-flow-step-row-active {
+  border-color: rgba(34, 211, 238, 0.18);
+  background: rgba(34, 211, 238, 0.06);
+}
+
+.nexus-flow-step-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.2rem;
+}
+
+.shell-command-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: start center;
+  background:
+    radial-gradient(circle at top, rgba(34, 211, 238, 0.12), transparent 22%),
+    rgba(3, 7, 16, 0.72);
+  padding: 9vh 1.2rem 1.2rem;
+  backdrop-filter: blur(12px);
+}
+
+.shell-command-palette {
+  width: min(760px, 100%);
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(180deg, rgba(16, 22, 38, 0.96), rgba(11, 16, 28, 0.96)),
+    rgba(13, 18, 32, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 24px 90px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(26px);
+}
+
+.shell-command-search {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1.05rem 1.2rem;
+}
+
+.shell-command-search input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-size: 16px;
+  color: white;
+  outline: none;
+}
+
+.shell-command-search input::placeholder {
+  color: rgba(148, 163, 184, 0.86);
+}
+
+.shell-command-results {
+  display: grid;
+  gap: 0.3rem;
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  padding: 0.65rem;
+}
+
+.shell-command-item {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  border-radius: 22px;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.95rem 1rem;
+  text-align: left;
+  color: rgba(226, 232, 240, 0.92);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.shell-command-item:hover,
+.shell-command-item-active {
+  border-color: rgba(84, 216, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateY(-1px);
+}
+
+.shell-command-item-icon {
+  display: inline-flex;
+  height: 38px;
+  width: 38px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(120, 216, 255, 0.96);
+}
+
+.shell-command-item-copy {
+  display: grid;
+  gap: 0.14rem;
+  min-width: 0;
+}
+
+.shell-command-item-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+}
+
+.shell-command-item-description {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(148, 163, 184, 0.88);
+}
+
+.shell-command-item-kicker {
+  margin-left: auto;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.35rem 0.6rem;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.shell-command-empty {
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 1rem;
+  text-align: center;
+  font-size: 14px;
+  color: rgba(148, 163, 184, 0.92);
 }
 
 .shell-card {
@@ -396,6 +1146,42 @@ body::after {
   will-change: transform;
 }
 
+.orb-state-listening {
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.28),
+    0 0 110px rgba(84, 216, 255, 0.18),
+    inset 0 0 44px rgba(58, 180, 219, 0.1);
+}
+
+.orb-state-thinking {
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.28),
+    0 0 110px rgba(139, 92, 246, 0.16),
+    inset 0 0 44px rgba(139, 92, 246, 0.1);
+}
+
+.orb-state-executing,
+.orb-state-success {
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.28),
+    0 0 110px rgba(47, 225, 177, 0.16),
+    inset 0 0 44px rgba(47, 225, 177, 0.1);
+}
+
+.orb-state-confirming {
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.28),
+    0 0 110px rgba(240, 187, 80, 0.16),
+    inset 0 0 44px rgba(240, 187, 80, 0.1);
+}
+
+.orb-state-error {
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.28),
+    0 0 110px rgba(243, 117, 136, 0.18),
+    inset 0 0 44px rgba(243, 117, 136, 0.12);
+}
+
 .orb-core::before,
 .orb-core::after {
   content: "";
@@ -527,6 +1313,62 @@ body::after {
   inset: 25%;
   border-style: dashed;
   opacity: 0.44;
+}
+
+.orb-shell-thinking,
+.orb-shell-thinking::after {
+  border-color: rgba(186, 166, 255, 0.28);
+}
+
+.orb-shell-thinking::before {
+  background: radial-gradient(circle at center, rgba(139, 92, 246, 0.16), transparent 70%);
+}
+
+.orb-shell-thinking .nexus-eye-scanner {
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0), rgba(139, 92, 246, 0.18), rgba(139, 92, 246, 0));
+}
+
+.orb-shell-executing,
+.orb-shell-executing::after,
+.orb-shell-success,
+.orb-shell-success::after {
+  border-color: rgba(126, 255, 217, 0.24);
+}
+
+.orb-shell-executing::before,
+.orb-shell-success::before {
+  background: radial-gradient(circle at center, rgba(47, 225, 177, 0.14), transparent 70%);
+}
+
+.orb-shell-executing .nexus-eye-scanner,
+.orb-shell-success .nexus-eye-scanner {
+  background: linear-gradient(90deg, rgba(47, 225, 177, 0), rgba(47, 225, 177, 0.18), rgba(47, 225, 177, 0));
+}
+
+.orb-shell-confirming,
+.orb-shell-confirming::after {
+  border-color: rgba(255, 214, 138, 0.24);
+}
+
+.orb-shell-confirming::before {
+  background: radial-gradient(circle at center, rgba(240, 187, 80, 0.14), transparent 70%);
+}
+
+.orb-shell-confirming .nexus-eye-scanner {
+  background: linear-gradient(90deg, rgba(240, 187, 80, 0), rgba(240, 187, 80, 0.18), rgba(240, 187, 80, 0));
+}
+
+.orb-shell-error,
+.orb-shell-error::after {
+  border-color: rgba(243, 117, 136, 0.24);
+}
+
+.orb-shell-error::before {
+  background: radial-gradient(circle at center, rgba(243, 117, 136, 0.14), transparent 70%);
+}
+
+.orb-shell-error .nexus-eye-scanner {
+  background: linear-gradient(90deg, rgba(243, 117, 136, 0), rgba(243, 117, 136, 0.18), rgba(243, 117, 136, 0));
 }
 
 .nexus-eye-shell {
@@ -815,27 +1657,108 @@ body::after {
   .shell-sidebar {
     bottom: 0;
     top: auto;
-    height: 74px;
+    height: auto;
     width: 100%;
-    flex-direction: row;
-    justify-content: center;
-    gap: 0.35rem;
     border-right: 0;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding: 0.75rem 0.5rem;
+    padding: 0.7rem 0.6rem;
   }
 
-  .shell-sidebar > div {
+  .shell-sidebar-scroll {
     display: flex;
-    flex-direction: row !important;
+    flex-direction: row;
     align-items: center;
-    border-top: 0;
-    padding-top: 0;
+    gap: 0.55rem;
+    overflow-x: auto;
+    padding: 0;
   }
 
   .shell-main {
     margin-left: 0;
     padding-bottom: 96px;
+  }
+
+  .shell-sidebar-brand,
+  .shell-sidebar-summary,
+  .shell-sidebar-heading,
+  .shell-sidebar-footer,
+  .shell-nav-description,
+  .shell-status-label {
+    display: none;
+  }
+
+  .shell-sidebar-nav {
+    display: flex;
+    flex-direction: row;
+    gap: 0.45rem;
+    overflow-x: auto;
+    padding-right: 0;
+  }
+
+  .shell-sidebar-section,
+  .shell-sidebar-list {
+    display: flex;
+    flex-direction: row;
+    gap: 0.45rem;
+  }
+
+  .shell-nav-button {
+    min-width: 82px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.7rem 0.65rem;
+  }
+
+  .shell-nav-copy {
+    gap: 0;
+  }
+
+  .shell-nav-title {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .shell-nav-icon {
+    height: 34px;
+    width: 34px;
+  }
+
+  .shell-topbar {
+    padding: 1.1rem 1rem;
+  }
+
+  .shell-topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .shell-topbar-signal-row {
+    justify-content: flex-start;
+  }
+
+  .shell-topbar-action span,
+  .shell-status-value {
+    font-size: 12px;
+  }
+
+  .shell-command-fab {
+    left: 1rem;
+    bottom: 6rem;
+  }
+
+  .shell-boot-grid {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .shell-boot-copy {
+    padding-right: 0;
+  }
+
+  .shell-command-palette-backdrop {
+    padding-top: 6vh;
   }
 
   .shell-nav-line {
@@ -860,6 +1783,29 @@ body::after {
 @media (max-width: 767px) {
   .shell-card {
     border-radius: 24px;
+  }
+
+  .shell-topbar {
+    gap: 1rem;
+  }
+
+  .shell-boot-orb-core {
+    height: 240px;
+    width: 240px;
+  }
+
+  .shell-status-pill,
+  .shell-topbar-action {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .shell-command-item {
+    align-items: flex-start;
+  }
+
+  .shell-command-item-kicker {
+    display: none;
   }
 
   .shell-chip {

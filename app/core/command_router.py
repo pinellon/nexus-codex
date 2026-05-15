@@ -7,6 +7,7 @@ from typing import Any
 
 from app.core.text_utils import normalize_text, remove_wake_word
 from app.agent.agent_commands import extract_task, is_agent_command
+from app.finance.intent import detect_finance_intent
 from app.vision.vision_commands import detect_intent as detect_vision_intent
 from app.vision.vision_commands import is_vision_command
 from app.home.home_commands import detect_home_intent, is_home_command
@@ -70,7 +71,7 @@ class CommandRouter:
         if "modo aula" in command_text or "modo estudo" in command_text:
             return Command("run_template", "automation", {"template": "modo_aula"}, raw, normalized)
 
-        if "modo apresentacao" in command_text or "modo apresentacao" in command_text:
+        if "modo apresentacao" in command_text or "modo apresentação" in command_text:
             return Command("run_template", "automation", {"template": "modo_apresentacao"}, raw, normalized)
 
         if "diagnostico rapido" in command_text:
@@ -81,6 +82,10 @@ class CommandRouter:
 
         if "ultimos eventos" in command_text or "historico da sessao" in command_text:
             return Command("session_summary", "diagnostics", {}, raw, normalized)
+
+        finance_intent = detect_finance_intent(command_text)
+        if finance_intent:
+            return Command(finance_intent.name, "finance", finance_intent.params, raw, normalized)
 
         try:
             from app.intent_desktop_actions import detect_desktop_intent

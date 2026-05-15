@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 import re
 
+from app.config import BASE_DIR
+from app.finance.store import FinanceStore
 from app.obsidian_memory import get_vault_path, markdown_files, normalize
 
 
@@ -172,6 +174,110 @@ def build_memory_graph(note_limit: int = 90, tag_limit: int = 80) -> dict[str, o
             if tag_id in nodes:
                 edges[(note_id, tag_id, "tagged")] = MemoryGraphEdge(note_id, tag_id, "tagged")
 
+    try:
+        finance_store = FinanceStore(base_dir=BASE_DIR)
+        transactions = sorted(finance_store.list_transactions(), key=lambda item: (item.date, item.created_at), reverse=True)[:18]
+        bills = sorted(finance_store.list_bills(), key=lambda item: item.due_date, reverse=True)[:12]
+        goals = sorted(finance_store.list_goals(), key=lambda item: item.deadline, reverse=True)[:10]
+        if transactions or bills or goals:
+            finance_root_id = _safe_id("finance", "financeiro")
+            nodes[finance_root_id] = MemoryGraphNode(
+                id=finance_root_id,
+                label="Financeiro",
+                node_type="finance",
+                group="finance",
+                size=22,
+                path="NEXUS/Financeiro",
+            )
+            edges[(vault_id, finance_root_id, "contains")] = MemoryGraphEdge(vault_id, finance_root_id, "contains")
+
+            account_ids: dict[str, str] = {}
+            category_ids: dict[str, str] = {}
+
+            def _ensure_account(name: str) -> str:
+                account_name = name.strip() or "Conta principal"
+                account_id = account_ids.get(account_name)
+                if account_id:
+                    return account_id
+                account_id = _safe_id("account", account_name)
+                account_ids[account_name] = account_id
+                nodes[account_id] = MemoryGraphNode(
+                    id=account_id,
+                    label=account_name,
+                    node_type="account",
+                    group="finance",
+                    size=15,
+                    path=account_name,
+                )
+                edges[(finance_root_id, account_id, "contains")] = MemoryGraphEdge(finance_root_id, account_id, "contains")
+                return account_id
+
+            def _ensure_category(name: str) -> str:
+                category_name = name.strip() or "Geral"
+                category_id = category_ids.get(category_name)
+                if category_id:
+                    return category_id
+                category_id = _safe_id("category", category_name)
+                category_ids[category_name] = category_id
+                nodes[category_id] = MemoryGraphNode(
+                    id=category_id,
+                    label=category_name,
+                    node_type="category",
+                    group="finance",
+                    size=14,
+                    path=category_name,
+                )
+                edges[(finance_root_id, category_id, "contains")] = MemoryGraphEdge(finance_root_id, category_id, "contains")
+                return category_id
+
+            for item in transactions:
+                account_id = _ensure_account(item.account)
+                category_id = _ensure_category(item.category)
+                transaction_id = _safe_id("transaction", item.id)
+                nodes[transaction_id] = MemoryGraphNode(
+                    id=transaction_id,
+                    label=item.title,
+                    node_type="transaction",
+                    group=item.category,
+                    size=11,
+                    path=item.date,
+                )
+                edges[(finance_root_id, transaction_id, "contains")] = MemoryGraphEdge(finance_root_id, transaction_id, "contains")
+                edges[(account_id, transaction_id, "contains")] = MemoryGraphEdge(account_id, transaction_id, "contains")
+                edges[(category_id, transaction_id, "contains")] = MemoryGraphEdge(category_id, transaction_id, "contains")
+
+            for item in bills:
+                account_id = _ensure_account(item.account)
+                category_id = _ensure_category(item.category)
+                bill_id = _safe_id("bill", item.id)
+                nodes[bill_id] = MemoryGraphNode(
+                    id=bill_id,
+                    label=item.title,
+                    node_type="bill",
+                    group=item.category,
+                    size=12,
+                    path=item.due_date,
+                )
+                edges[(finance_root_id, bill_id, "contains")] = MemoryGraphEdge(finance_root_id, bill_id, "contains")
+                edges[(account_id, bill_id, "contains")] = MemoryGraphEdge(account_id, bill_id, "contains")
+                edges[(category_id, bill_id, "contains")] = MemoryGraphEdge(category_id, bill_id, "contains")
+
+            for item in goals:
+                goal_id = _safe_id("goal", item.id)
+                nodes[goal_id] = MemoryGraphNode(
+                    id=goal_id,
+                    label=item.title,
+                    node_type="goal",
+                    group="finance",
+                    size=13,
+                    path=item.deadline,
+                )
+                edges[(finance_root_id, goal_id, "contains")] = MemoryGraphEdge(finance_root_id, goal_id, "contains")
+    except Exception:
+        pass
+
+    finance_types = {"finance", "account", "category", "transaction", "bill", "goal"}
+
     return {
         "enabled": True,
         "vault_name": vault.name,
@@ -183,5 +289,6 @@ def build_memory_graph(note_limit: int = 90, tag_limit: int = 80) -> dict[str, o
             "notes": len([node for node in nodes.values() if node.node_type == "note"]),
             "tags": len([node for node in nodes.values() if node.node_type == "tag"]),
             "links": links_count,
+            "finance": len([node for node in nodes.values() if node.node_type in finance_types]),
         },
     }

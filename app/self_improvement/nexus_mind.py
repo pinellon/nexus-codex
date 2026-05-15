@@ -1,6 +1,5 @@
 import time
 import threading
-import subprocess
 import os
 
 from .git_guard import GitGuard
@@ -14,8 +13,7 @@ class NexusMind:
         from app.self_improvement.file_tracker import FileTracker
         from app.self_improvement.sandbox_manager import SandboxManager
         from app.self_improvement.score_engine import ScoreEngine
-        import os
-        
+
         self.client = OpenAI(api_key=api_key)
         self.high_improvement = high_improvement
         self.auto_mode = auto_mode or high_improvement
@@ -134,10 +132,10 @@ Retorne APENAS um JSON:
         
         # 5. Confirmação (se não for modo autônomo)
         if not self.auto_mode:
-            self._log(f"🤖 Mudança PENDENTE (Modo Supervisionado):")
+            self._log("🤖 Mudança PENDENTE (Modo Supervisionado):")
             self._log(f"Ação: {plan.get('action')} em {plan.get('file_path')}")
             self._log(f"Motivo: {plan.get('reasoning')}")
-            self._log(f"Aprovação pendente pelo console (ver log).")
+            self._log("Aprovação pendente pelo console (ver log).")
             # Para evitar travar a UI com um input(), no modo supervisionado da UI, vamos abortar a alteração se não tivermos
             # uma interface de "aprovar" real neste momento, ou simplesmente logar que a UI não suporta aprovação síncrona ainda.
             self._log("⏭️ Mudança ignorada porque requer aprovação manual não implementada (use autônomo para testar).")
@@ -162,11 +160,12 @@ Retorne APENAS um JSON:
         path_in_sandbox = os.path.join(sandbox_dir, rel_path)
         
         # Aplica a mudança NO SANDBOX
+        editor = CodeEditor(root_dir=sandbox_dir)
         success = False
         if action in ("edit", "create"):
-            success = self.editor.write_file(path_in_sandbox, plan.get("new_content", ""))
+            success = editor.write_file(path_in_sandbox, plan.get("new_content", ""))
         elif action == "delete":
-            success = self.editor.delete_file(path_in_sandbox)
+            success = editor.delete_file(path_in_sandbox)
         
         if not success:
             self._log("❌ Falha ao aplicar mudança no sandbox")

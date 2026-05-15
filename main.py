@@ -8,7 +8,6 @@ from app.core.command_router import CommandRouter
 from app.logs.nexus_logger import build_logger
 from app.voice.listener import VoiceListener
 from app.voice.speaker import VoiceSpeaker
-import theme
 
 # Constante de inicializacao da aplicacao.
 VOICE_DEMO_MESSAGE = "NEXUS online. Modo demo de voz."
@@ -62,6 +61,8 @@ def execute_mode(args: argparse.Namespace, settings, logger):
     if args.voice_demo:
         run_voice_demo(settings, logger)
     elif args.desktop:
+        import theme
+
         theme.main()
     else:
         from app.web.server import run as run_web_api

@@ -57,7 +57,10 @@ class WebNexusMindRuntime:
     def _load_settings(self) -> dict[str, Any]:
         if self.SETTINGS_PATH.exists():
             try:
-                return json.loads(self.SETTINGS_PATH.read_text(encoding="utf-8"))
+                loaded = json.loads(self.SETTINGS_PATH.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    loaded["mode"] = self._normalize_mode(loaded.get("mode", "supervisionado"))
+                    return loaded
             except Exception:
                 pass
         return {
@@ -86,10 +89,25 @@ class WebNexusMindRuntime:
             self._apply_settings_to_mind()
         return self._mind
 
+    def _autonomy_unlocked(self) -> bool:
+        return bool(settings_manager.load().get("mind_allow_autonomous", False))
+
+    def _normalize_mode(self, value: Any) -> str:
+        mode = str(value or "supervisionado").strip().lower()
+        if mode == "autonomo":
+            mode = "autônomo"
+        if mode not in {"supervisionado", "autônomo", "agressivo"}:
+            mode = "supervisionado"
+        if mode != "supervisionado" and not self._autonomy_unlocked():
+            self._capture_log("🔒 Modos autônomo e agressivo ficam bloqueados até liberar a permissão mind_allow_autonomous.")
+            return "supervisionado"
+        return mode
+
     def _apply_settings_to_mind(self) -> None:
         if self._mind is None:
             return
-        mode = str(self._settings.get("mode", "supervisionado") or "supervisionado")
+        mode = self._normalize_mode(self._settings.get("mode", "supervisionado"))
+        self._settings["mode"] = mode
         self._mind.auto_mode = mode != "supervisionado"
         self._mind.high_improvement = mode == "agressivo"
         interval_minutes = int(float(self._settings.get("interval", 5) or 5))
@@ -140,7 +158,10 @@ class WebNexusMindRuntime:
         for key, value in (updates or {}).items():
             if key not in allowed:
                 continue
-            self._settings[key] = value
+            if key == "mode":
+                self._settings[key] = self._normalize_mode(value)
+            else:
+                self._settings[key] = value
         self._save_settings()
         if self._mind is not None:
             self._apply_settings_to_mind()

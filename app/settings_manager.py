@@ -8,10 +8,16 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 
 _DEFAULTS = {
     "openai_api_key": "",
+    "local_api_token": "",
     "owner_name": "Nicolas",
     "speak_responses": True,
     "voice_backend": "auto",
     "voice_input_device": "",
+    "voice_output_device": "",
+    "browser_voice_input_device": "",
+    "browser_voice_output_device": "",
+    "professional_voice_provider": "auto",
+    "professional_voice_profile": "jarvis",
     "wake_word": "nexus",
     "voice_require_wake_word": True,
     "voice_confirm_commands": True,
@@ -43,6 +49,7 @@ _DEFAULTS = {
     "obsidian_memory_folder": "NEXUS/Memory Inbox",
     "obsidian_auto_register": True,
     "obsidian_max_results": 5,
+    "mind_allow_autonomous": False,
     "monitor_interval_ms": 2000,
 }
 

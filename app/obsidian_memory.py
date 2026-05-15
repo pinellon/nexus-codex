@@ -218,6 +218,46 @@ tags:
         return None
 
 
+def save_note(
+    title: str,
+    body: str,
+    *,
+    folder: str = "NEXUS/Conversas",
+    frontmatter: dict[str, object] | None = None,
+) -> Path | None:
+    cfg = load()
+    if not cfg.get("obsidian_enabled", True):
+        return None
+    vault = get_vault_path()
+    if not vault:
+        return None
+
+    target_folder = vault / folder
+    target_folder.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y-%m-%d %H%M%S")
+    path = target_folder / f"{stamp} - {safe_note_title(title)}.md"
+    header = ""
+    if frontmatter:
+        lines = ["---"]
+        for key, value in frontmatter.items():
+            if isinstance(value, list):
+                lines.append(f"{key}:")
+                for item in value:
+                    lines.append(f"  - {item}")
+            else:
+                lines.append(f"{key}: {value}")
+        lines.append("---")
+        header = "\n".join(lines) + "\n\n"
+
+    try:
+        path.write_text(header + body.strip() + "\n", encoding="utf-8")
+        log_action(f"Obsidian: nota salva em {path}")
+        return path
+    except Exception as error:
+        log_error(f"Obsidian save_note error: {error}")
+        return None
+
+
 def search_or_status(query: str = "") -> str:
     vault = get_vault_path()
     if not vault:

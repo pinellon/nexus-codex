@@ -33,6 +33,7 @@ from app.features.command_suggestions import format_suggestions
 from app.features.command_templates import describe_templates, get_template
 from app.features.project_health import analyze_project
 from app.features.session_recorder import SessionRecorder
+from app.finance.service import FinanceService
 from app.agent.agent_commands import AgentCommandHandler
 from app.vision.vision_commands import VisionCommandHandler
 from app.home.home_commands import HomeCommandHandler
@@ -46,6 +47,7 @@ _session_recorder = SessionRecorder(ROOT / "data" / "session_events.jsonl")
 _agent_handler: AgentCommandHandler | None = None
 _vision_handler: VisionCommandHandler | None = None
 _home_handler: HomeCommandHandler | None = None
+_finance_service: FinanceService | None = None
 _live_event_listeners: list[Callable[[str, str, dict], None]] = []
 _DESKTOP_LEGACY_NOTICE = (
     "[NEXUS] A interface desktop entrou em modo legado.\n"
@@ -177,6 +179,9 @@ def _processar_recursos_inteligentes(texto: str, confirm_callback=None) -> str:
     if command.domain == "home" and command.intent == "home":
         return _get_home_handler().run_and_wait(texto)
 
+    if command.domain == "finance":
+        return _get_finance_service().execute_intent(command.intent, command.args)
+
     if command.domain == "system" and command.intent == "help":
         return (
             "Comandos principais do NEXUS:\n"
@@ -239,6 +244,13 @@ def _get_home_handler() -> HomeCommandHandler:
             ui_callback=lambda message: _record_event("home", message),
         )
     return _home_handler
+
+
+def _get_finance_service() -> FinanceService:
+    global _finance_service
+    if _finance_service is None:
+        _finance_service = FinanceService(base_dir=ROOT)
+    return _finance_service
 
 
 def _executar_template(template_name: str, confirm_callback=None) -> str:

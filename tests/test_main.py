@@ -51,6 +51,22 @@ class TestMain(unittest.TestCase):
 
     @patch('app.config.load_settings', return_value=MagicMock())
     @patch('app.logs.nexus_logger.build_logger')
+    @patch('app.web.server.run')
+    def test_default_mode_does_not_import_theme(self, mock_run_web_api, mock_build_logger, mock_load_settings):
+        test_args = ['main.py']
+        with patch.object(sys, 'argv', test_args):
+            with patch.dict(sys.modules, {'theme': None}):
+                try:
+                    del sys.modules['main']
+                except KeyError:
+                    pass
+                import main
+                main.main()
+
+        mock_run_web_api.assert_called_once_with(host='127.0.0.1', port=8001)
+
+    @patch('app.config.load_settings', return_value=MagicMock())
+    @patch('app.logs.nexus_logger.build_logger')
     @patch('theme.main')
     def test_desktop_mode_is_explicit(self, mock_theme_main, mock_build_logger, mock_load_settings):
         test_args = ['main.py', '--desktop']

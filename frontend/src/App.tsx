@@ -28,10 +28,16 @@ import {
   ZoomOut,
   RefreshCcw,
   ExternalLink,
+  GitBranch,
   type LucideIcon,
 } from "lucide-react";
 
+import { NexusFlow } from "@/components/nexus-flow";
+import { ConversationModePanel } from "@/components/conversation-mode-panel";
+import { NexusParticleOrb } from "@/components/nexus-particle-orb";
 import { SettingsForm } from "@/components/settings-form";
+import { useConversationMode, type ConversationModeController, type OrbState } from "@/hooks/useConversationMode";
+import { normalizePreferredDeviceId, verifyMicrophoneAccess } from "@/lib/browser-audio";
 import {
   analyzeMedia,
   apiBase,
@@ -40,6 +46,12 @@ import {
   captureVisionScreen,
   fetchAutomationCatalog,
   fetchDashboard,
+  fetchFinanceBills,
+  fetchFinanceCategories,
+  fetchFinanceGoals,
+  fetchFinanceMonthlyChart,
+  fetchFinanceSummary,
+  fetchFinanceTransactions,
   fetchMemoryGraph,
   fetchMindState,
   fetchRuntimeStatus,
@@ -50,6 +62,7 @@ import {
   runMindCycle,
   runVisionCameraAction,
   runVisionScreenAction,
+  setApiToken,
   saveSettings,
   saveMindSettings,
   sendChat,
@@ -58,6 +71,12 @@ import {
   type AutomationSection,
   type DashboardModule,
   type DashboardPayload,
+  type FinanceBill,
+  type FinanceCategoryBreakdown,
+  type FinanceGoal,
+  type FinanceMonthlyChart,
+  type FinanceSummary,
+  type FinanceTransaction,
   type MindState,
   type MemoryGraphPayload,
   type RuntimeStatus,
@@ -119,11 +138,12 @@ type BrowserSpeechRecognitionInstance = {
 
 type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognitionInstance;
 
-type ViewId = "chat" | "automation" | "brain" | "vision" | "mind" | "tasks" | "reminders" | "finance" | "telemetry" | "settings";
-type BrainMode = "brain" | "diary" | "dump";
+type ViewId = "chat" | "conversation" | "flow" | "automation" | "brain" | "vision" | "mind" | "tasks" | "reminders" | "finance" | "telemetry" | "settings";
+type BrainMode = "brain" | "notes" | "tags" | "finance" | "projects" | "tasks";
 type TaskFilter = "all" | "normal" | "recurring";
+type ModuleHealthFilter = "all" | "online" | "attention" | "blocked";
 type ReminderTab = "upcoming" | "today" | "expired" | "history";
-type FinanceFilter = "all" | "variable" | "recurring" | "installments";
+type FinanceFilter = "all" | "expenses" | "income" | "pending" | "goals";
 type SettingsTab = "profile" | "updates" | "integrations" | "system";
 type ProfileContrast = "normal" | "high";
 type FontScale = "normal" | "large";
@@ -131,8 +151,27 @@ type FontScale = "normal" | "large";
 type NavItem = {
   id: ViewId;
   label: string;
+  description: string;
+  section: "primary" | "tools" | "operations" | "system";
   icon: LucideIcon;
 };
+
+type NavSection = {
+  id: NavItem["section"];
+  label: string;
+};
+
+type PaletteAction = {
+  id: string;
+  label: string;
+  description: string;
+  keywords: string[];
+  icon: LucideIcon;
+  hint?: string;
+  run: () => void;
+};
+
+type OrbVisualState = "idle" | "listening" | "thinking" | "executing" | "confirming" | "success" | "error";
 
 type BrainNode = {
   id: string;
@@ -140,10 +179,10 @@ type BrainNode = {
   x: number;
   y: number;
   size: number;
-  tone: "core" | "area" | "tag";
+  tone: "core" | "area" | "tag" | "finance";
   group: string;
   path: string;
-  nodeType: "vault" | "area" | "note" | "tag";
+  nodeType: "vault" | "area" | "note" | "tag" | "finance" | "account" | "category" | "transaction" | "bill" | "goal";
 };
 
 type TaskRow = {
@@ -218,16 +257,97 @@ type OrbEdge = {
 };
 
 const navItems: NavItem[] = [
-  { id: "chat", label: "Chat", icon: MessageCircle },
-  { id: "automation", label: "Automacao", icon: SlidersHorizontal },
-  { id: "brain", label: "Memoria", icon: Brain },
-  { id: "vision", label: "Visao", icon: Eye },
-  { id: "mind", label: "Mind", icon: Sparkles },
-  { id: "tasks", label: "Painel", icon: FolderKanban },
-  { id: "reminders", label: "Alertas", icon: Bell },
-  { id: "finance", label: "Financeiro", icon: CircleDollarSign },
-  { id: "telemetry", label: "Atividade", icon: Activity },
-  { id: "settings", label: "Configuracoes", icon: Settings },
+  {
+    id: "chat",
+    label: "Command Center",
+    description: "Converse, dispare comandos e acompanhe o Nexus.",
+    section: "primary",
+    icon: MessageCircle,
+  },
+  {
+    id: "conversation",
+    label: "Conversa",
+    description: "Modo Jarvis para estudar, organizar e falar naturalmente.",
+    section: "primary",
+    icon: Headphones,
+  },
+  {
+    id: "tasks",
+    label: "Painel",
+    description: "Status operacional dos modulos e projetos.",
+    section: "primary",
+    icon: FolderKanban,
+  },
+  {
+    id: "flow",
+    label: "Nexus Flow",
+    description: "Canvas visual de planos, automacoes e execucao por etapa.",
+    section: "tools",
+    icon: GitBranch,
+  },
+  {
+    id: "automation",
+    label: "Automacao",
+    description: "Fluxos protegidos para o PC e ambiente local.",
+    section: "tools",
+    icon: SlidersHorizontal,
+  },
+  {
+    id: "vision",
+    label: "Vision",
+    description: "Tela, camera e leitura visual assistida.",
+    section: "tools",
+    icon: Eye,
+  },
+  {
+    id: "brain",
+    label: "Memoria",
+    description: "Contexto persistente, notas e grafo do Nexus.",
+    section: "tools",
+    icon: Brain,
+  },
+  {
+    id: "mind",
+    label: "NexusMind",
+    description: "Auto-melhoria supervisionada com testes e rollback.",
+    section: "tools",
+    icon: Sparkles,
+  },
+  {
+    id: "reminders",
+    label: "Alertas",
+    description: "Lembretes, recorrencias e rotina pessoal.",
+    section: "operations",
+    icon: Bell,
+  },
+  {
+    id: "finance",
+    label: "Financeiro",
+    description: "Entradas, gastos e visao rapida do mes.",
+    section: "operations",
+    icon: CircleDollarSign,
+  },
+  {
+    id: "telemetry",
+    label: "Logs",
+    description: "Eventos, auditoria e telemetria do sistema.",
+    section: "operations",
+    icon: Activity,
+  },
+  {
+    id: "settings",
+    label: "Configuracoes",
+    description: "Perfil, integracoes, seguranca e sistema.",
+    section: "system",
+    icon: Settings,
+  },
+];
+
+const navSections: NavSection[] = [
+  { id: "primary", label: "Principal" },
+  { id: "tools", label: "Ferramentas" },
+  { id: "operations", label: "Operacao" },
+  { id: "system", label: "Sistema" },
 ];
 
 const quickActions: QuickChip[] = [
@@ -635,6 +755,129 @@ function toneClass(tone: string) {
   return "text-[#54d8ff]";
 }
 
+function titleCaseTokens(text: string) {
+  return text
+    .split(" ")
+    .filter(Boolean)
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(" ");
+}
+
+function describeUnderstoodIntent(meta?: string | null) {
+  const normalized = (meta || "").trim();
+  if (!normalized || normalized === "bootstrap") {
+    return "Aguardando uma nova acao.";
+  }
+
+  const [domain, intent] = normalized.split(":");
+  if (!intent) {
+    return titleCaseTokens(normalized.replace(/[_/-]+/g, " "));
+  }
+
+  const domainLabelMap: Record<string, string> = {
+    agent: "Agente",
+    apps: "Apps",
+    assistant: "Assistente",
+    automation: "Automacao",
+    coder: "Coder",
+    desktop: "Desktop",
+    diagnostics: "Diagnostico",
+    home: "Casa",
+    memory: "Memoria",
+    pc: "PC",
+    system: "Sistema",
+    vision: "Visao",
+  };
+
+  const domainLabel = domainLabelMap[domain] ?? titleCaseTokens(domain.replace(/[_/-]+/g, " "));
+  const intentLabel = titleCaseTokens(intent.replace(/[_/-]+/g, " "));
+  return `${domainLabel}: ${intentLabel}`;
+}
+
+function describeNaturalConversationState(state: OrbState) {
+  switch (state) {
+    case "listening":
+      return "Modo Jarvis ouvindo";
+    case "thinking":
+      return "Modo Jarvis pensando";
+    case "speaking":
+      return "Modo Jarvis respondendo";
+    case "ready":
+      return "Modo Jarvis pronto";
+    case "paused":
+      return "Modo Jarvis pausado";
+    case "error":
+      return "Modo Jarvis com erro";
+    default:
+      return "Modo Jarvis aguardando";
+  }
+}
+
+function inferCommandRisk(text: string) {
+  const normalized = normalizeVoiceText(text);
+  if (!normalized) {
+    return "Baixo";
+  }
+  if (/(desliga|reinicia|format|apaga|delete|remove|rollback|terminal|git push|git reset)/.test(normalized)) {
+    return "Alto";
+  }
+  if (/(fecha|move|lixeira|camera|tela|patch|arquivo|configur)/.test(normalized)) {
+    return "Medio";
+  }
+  return "Baixo";
+}
+
+function formatClockLabel(value?: string | null) {
+  if (!value) {
+    return "--:--";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "--:--";
+  }
+
+  return date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatRuntimeStamp(value?: string | null) {
+  if (!value) {
+    return "Sem atualizacao recente";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Sem atualizacao recente";
+  }
+
+  return `Atualizado ${date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })}`;
+}
+
+function eventTone(kind: string, message: string) {
+  const haystack = normalizeVoiceText(`${kind} ${message}`);
+  if (/(error|falha|fail|denied|negad|blocked|bloque)/.test(haystack)) {
+    return "danger";
+  }
+  if (/(warn|confirm|pendente|aguardando|guarded|risco)/.test(haystack)) {
+    return "warning";
+  }
+  if (/(ok|success|sucesso|concluido|opened|aberto|executado)/.test(haystack)) {
+    return "online";
+  }
+  return "sky";
+}
+
+function eventLabel(kind: string) {
+  return titleCaseTokens(kind.replace(/[/:_-]+/g, " "));
+}
+
 const GRAPH_WIDTH = 980;
 const GRAPH_HEIGHT = 680;
 const GRAPH_CENTER = { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 };
@@ -655,16 +898,43 @@ function hashBrainValue(text: string) {
   return hash;
 }
 
+const FINANCE_NODE_TYPES = new Set<MemoryGraphPayload["nodes"][number]["node_type"]>([
+  "finance",
+  "account",
+  "category",
+  "transaction",
+  "bill",
+  "goal",
+]);
+
 function matchesBrainMode(node: MemoryGraphPayload["nodes"][number], mode: BrainMode) {
-  if (node.node_type !== "note") {
-    return true;
+  const haystack = normalizeBrainText(`${node.label} ${node.path} ${node.group}`);
+  if (mode === "notes") {
+    return ["vault", "area", "note"].includes(node.node_type);
   }
-  const haystack = normalizeBrainText(`${node.label} ${node.path}`);
-  if (mode === "diary") {
-    return /diario/.test(haystack);
+  if (mode === "tags") {
+    return ["vault", "area", "note", "tag"].includes(node.node_type);
   }
-  if (mode === "dump") {
-    return /brain dump|dump/.test(haystack);
+  if (mode === "finance") {
+    return node.node_type === "vault" || FINANCE_NODE_TYPES.has(node.node_type);
+  }
+  if (mode === "projects") {
+    if (FINANCE_NODE_TYPES.has(node.node_type)) {
+      return false;
+    }
+    if (node.node_type !== "note") {
+      return true;
+    }
+    return /projeto|project|repo|git|nexus|coder/.test(haystack);
+  }
+  if (mode === "tasks") {
+    if (FINANCE_NODE_TYPES.has(node.node_type)) {
+      return false;
+    }
+    if (node.node_type !== "note") {
+      return true;
+    }
+    return /task|tarefa|todo|roadmap|backlog|prazo/.test(haystack);
   }
   return true;
 }
@@ -705,6 +975,7 @@ function buildBrainGraph(
   }
 
   const allNotes = allNodes.filter((node) => node.node_type === "note");
+  const financeNodes = allNodes.filter((node) => FINANCE_NODE_TYPES.has(node.node_type));
   const areas = Array.from(new Set(allNotes.map((node) => node.group))).sort((left, right) => left.localeCompare(right));
   const tags = Array.from(new Set(Array.from(noteTags.values()).flat())).sort((left, right) => left.localeCompare(right));
   const searchNeedle = normalizeBrainText(options.search);
@@ -730,7 +1001,19 @@ function buildBrainGraph(
     return true;
   });
 
+  const visibleFinanceNodes = financeNodes.filter((node) => {
+    if (!matchesBrainMode(node, options.mode)) {
+      return false;
+    }
+    if (searchNeedle) {
+      const searchable = normalizeBrainText(`${node.label} ${node.path} ${node.group}`);
+      return searchable.includes(searchNeedle);
+    }
+    return true;
+  });
+
   const visibleNoteIds = new Set(visibleNotes.map((node) => node.id));
+  const visibleFinanceIds = new Set(visibleFinanceNodes.map((node) => node.id));
   const visibleAreaIds = new Set(
     allNodes
       .filter((node) => node.node_type === "area" && visibleNotes.some((note) => note.group === node.label))
@@ -757,6 +1040,9 @@ function buildBrainGraph(
     if (node.node_type === "tag" && visibleTagIds.has(node.id)) {
       includedIds.add(node.id);
     }
+    if (FINANCE_NODE_TYPES.has(node.node_type) && visibleFinanceIds.has(node.id)) {
+      includedIds.add(node.id);
+    }
   }
 
   const edges = memoryGraph.edges.filter((edge) => {
@@ -774,8 +1060,12 @@ function buildBrainGraph(
   const areaNodes = sourceNodes.filter((node) => node.node_type === "area");
   const noteNodes = sourceNodes.filter((node) => node.node_type === "note");
   const tagNodes = sourceNodes.filter((node) => node.node_type === "tag");
+  const financeRoot = sourceNodes.find((node) => node.node_type === "finance");
+  const financeAnchorNodes = sourceNodes.filter((node) => node.node_type === "account" || node.node_type === "category");
+  const financeLeafNodes = sourceNodes.filter((node) => node.node_type === "transaction" || node.node_type === "bill" || node.node_type === "goal");
   const positioned: BrainNode[] = [];
   const areaAnchors = new Map<string, { x: number; y: number }>();
+  const financeAnchors = new Map<string, { x: number; y: number }>();
 
   if (vaultNode) {
     positioned.push({
@@ -814,7 +1104,45 @@ function buildBrainGraph(
     });
   });
 
-  noteNodes.forEach((node, index) => {
+  if (financeRoot) {
+    const financeCenter = { x: GRAPH_CENTER.x + 260, y: GRAPH_CENTER.y - 12 };
+    positioned.push({
+      id: financeRoot.id,
+      label: financeRoot.label,
+      x: financeCenter.x,
+      y: financeCenter.y,
+      size: 20,
+      tone: "finance",
+      group: financeRoot.group,
+      path: financeRoot.path,
+      nodeType: "finance",
+    });
+
+    financeAnchorNodes.forEach((node, index) => {
+      const hash = hashBrainValue(`${node.id}:${options.layoutSeed}`);
+      const angle = (Math.PI * 2 * index) / Math.max(financeAnchorNodes.length, 1) + (hash % 28) * 0.02;
+      const radiusX = 120 + (hash % 32);
+      const radiusY = 95 + ((hash >> 3) % 26);
+      const anchor = {
+        x: financeCenter.x + Math.cos(angle) * radiusX,
+        y: financeCenter.y + Math.sin(angle) * radiusY,
+      };
+      financeAnchors.set(node.id, anchor);
+      positioned.push({
+        id: node.id,
+        label: node.label,
+        x: anchor.x,
+        y: anchor.y,
+        size: node.node_type === "account" ? 13 : 12,
+        tone: "finance",
+        group: node.group,
+        path: node.path,
+        nodeType: node.node_type,
+      });
+    });
+  }
+
+  noteNodes.forEach((node) => {
     const anchor = areaAnchors.get(node.group) ?? GRAPH_CENTER;
     const hash = hashBrainValue(`${node.id}:${options.layoutSeed}`);
     const angle = ((hash % 360) * Math.PI) / 180;
@@ -836,7 +1164,29 @@ function buildBrainGraph(
 
   const positionedNotes = positioned.filter((node) => node.nodeType === "note");
 
-  tagNodes.forEach((node, index) => {
+  financeLeafNodes.forEach((node) => {
+    const parentEdge = edges.find((edge) => edge.target === node.id && financeAnchors.has(edge.source));
+    const basePoint =
+      (parentEdge ? financeAnchors.get(parentEdge.source) : undefined)
+      ?? (financeRoot ? positioned.find((item) => item.id === financeRoot.id) : undefined)
+      ?? { x: GRAPH_CENTER.x + 240, y: GRAPH_CENTER.y };
+    const hash = hashBrainValue(`${node.id}:${options.layoutSeed}`);
+    const angle = ((hash % 360) * Math.PI) / 180;
+    const radius = node.node_type === "goal" ? 118 + (hash % 34) : 78 + (hash % 62);
+    positioned.push({
+      id: node.id,
+      label: node.label.slice(0, 28),
+      x: basePoint.x + Math.cos(angle) * radius,
+      y: basePoint.y + Math.sin(angle) * radius * 0.72,
+      size: Math.max(9, Math.min(node.size, 14)),
+      tone: "finance",
+      group: node.group,
+      path: node.path,
+      nodeType: node.node_type,
+    });
+  });
+
+  tagNodes.forEach((node) => {
     const relatedNotes = graphEdgesForTag(node.id, edges, positionedNotes);
     const basePoint =
       relatedNotes.length > 0
@@ -894,6 +1244,29 @@ function splitFinanceCategory(category: string) {
   };
 }
 
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 2,
+  }).format(value || 0);
+}
+
+function formatShortDate(value: string) {
+  if (!value) {
+    return "--/--";
+  }
+  const [year, month, day] = value.split("-");
+  if (year && month && day) {
+    return `${day}/${month}`;
+  }
+  return value;
+}
+
+function progressPercent(value: number) {
+  return `${Math.round(Math.max(0, Math.min(value, 1)) * 100)}%`;
+}
+
 async function copyText(text: string) {
   if (typeof navigator === "undefined" || !navigator.clipboard) {
     throw new Error("Clipboard indisponivel neste navegador.");
@@ -938,47 +1311,454 @@ function ShellCard({
   );
 }
 
+function StatusPill({
+  label,
+  value,
+  tone = "sky",
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+}) {
+  return (
+    <div className="shell-status-pill">
+      <span className={`shell-status-dot ${toneClass(tone)}`} />
+      <span className="shell-status-copy">
+        <span className="shell-status-label">{label}</span>
+        <span className="shell-status-value">{value}</span>
+      </span>
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  detail,
+  tone = "sky",
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: string;
+}) {
+  return (
+    <div className="shell-metric-card">
+      <p className="shell-eyebrow">{label}</p>
+      <p className={`mt-3 text-4xl font-semibold ${toneClass(tone)}`}>{value}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-400">{detail}</p>
+    </div>
+  );
+}
+
+function EmptyState({
+  eyebrow,
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="shell-empty-state">
+      <p className="shell-eyebrow">{eyebrow}</p>
+      <h3 className="mt-3 text-lg font-semibold text-white">{title}</h3>
+      <p className="mt-2 max-w-md text-sm leading-7 text-slate-400">{description}</p>
+      {actionLabel && onAction ? (
+        <button type="button" className="mt-5 shell-chip" onClick={onAction}>
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function BootScreen({ ownerName }: { ownerName: string }) {
+  const steps = [
+    "Inicializando nucleo...",
+    "Carregando modulos...",
+    "Verificando IA...",
+    "Conectando voz...",
+    "Preparando interface...",
+  ];
+  const [visibleStep, setVisibleStep] = useState(1);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setVisibleStep((current) => Math.min(current + 1, steps.length));
+    }, 520);
+    return () => window.clearInterval(intervalId);
+  }, [steps.length]);
+
+  return (
+    <div className="shell-boot-screen">
+      <div className="shell-boot-grid">
+        <div className="shell-boot-copy">
+          <p className="shell-eyebrow text-[#78d8ff]">NEXUS CODEX</p>
+          <h1 className="shell-display mt-4 text-5xl font-semibold text-white">Inicializando cockpit inteligente</h1>
+          <p className="mt-4 max-w-xl text-base leading-8 text-slate-400">
+            Preparando voz, automacao, memoria, visao e interface web-first para voce.
+          </p>
+          <div className="mt-8 space-y-3">
+            {steps.map((step, index) => {
+              const active = index < visibleStep;
+              const current = index === visibleStep - 1;
+              return (
+                <div key={step} className={`shell-boot-step ${active ? "shell-boot-step-active" : ""}`}>
+                  <span className={`shell-boot-step-dot ${current ? "shell-boot-step-dot-live" : ""}`} />
+                  <span>{step}</span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-8 text-sm uppercase tracking-[0.24em] text-slate-500">Sistema pronto, {ownerName}.</p>
+        </div>
+
+        <div className="shell-boot-orb-wrap">
+          <div className="shell-boot-orb-core">
+            <motion.div
+              className="shell-boot-orb-ring shell-boot-orb-ring-a"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 14, ease: "linear", repeat: Number.POSITIVE_INFINITY }}
+            />
+            <motion.div
+              className="shell-boot-orb-ring shell-boot-orb-ring-b"
+              animate={{ rotate: -360 }}
+              transition={{ duration: 18, ease: "linear", repeat: Number.POSITIVE_INFINITY }}
+            />
+            <motion.div
+              className="shell-boot-orb-pulse"
+              animate={{ scale: [1, 1.06, 1], opacity: [0.38, 0.62, 0.38] }}
+              transition={{ duration: 2.8, ease: "easeInOut", repeat: Number.POSITIVE_INFINITY }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Sidebar({
   activeView,
+  dashboard,
   onSelect,
+  onOpenPalette,
   onHelp,
 }: {
   activeView: ViewId;
+  dashboard: DashboardPayload | null;
   onSelect: (view: ViewId) => void;
+  onOpenPalette: () => void;
   onHelp: () => void;
 }) {
+  const healthScore = dashboard?.health.score ?? 0;
+  const healthLabel = healthScore >= 80 ? "Online" : healthScore >= 60 ? "Estavel" : "Atencao";
+
   return (
     <aside className="shell-sidebar">
-      <div className="flex flex-1 flex-col gap-3">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active = item.id === activeView;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onSelect(item.id)}
-              className={`shell-nav-button ${active ? "shell-nav-button-active" : ""}`}
-              aria-label={item.label}
-              title={item.label}
-            >
-              <span className="shell-nav-line" />
-              <Icon className="h-5 w-5" />
-            </button>
-          );
-        })}
-      </div>
-      <div className="border-t border-white/8 pt-4">
-        <button type="button" className="shell-nav-button" aria-label="Ajuda" title="Ajuda" onClick={onHelp}>
-          <span className="shell-nav-line" />
-          <HelpCircle className="h-5 w-5" />
-        </button>
+      <div className="shell-sidebar-scroll">
+        <div className="shell-sidebar-brand">
+          <div className="shell-sidebar-brand-mark">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="shell-eyebrow text-[#78d8ff]">Nexus Codex</p>
+            <h2 className="shell-display mt-2 text-xl font-semibold text-white">AI Command OS</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Workspace premium para voz, automacao, memoria, visao e coding supervisionado.</p>
+          </div>
+        </div>
+
+        <div className="shell-sidebar-summary">
+          <StatusPill label="Nexus" value={healthLabel} tone={healthLabel === "Online" ? "online" : healthLabel === "Estavel" ? "sky" : "warning"} />
+          <StatusPill label="Saude" value={`${healthScore || "--"}%`} tone={healthScore >= 80 ? "online" : healthScore >= 60 ? "sky" : "warning"} />
+        </div>
+
+        <nav className="shell-sidebar-nav" aria-label="Navegacao principal">
+          {navSections.map((section) => {
+            const sectionItems = navItems.filter((item) => item.section === section.id);
+            if (!sectionItems.length) {
+              return null;
+            }
+
+            return (
+              <div key={section.id} className="shell-sidebar-section">
+                <p className="shell-sidebar-heading">{section.label}</p>
+                <div className="shell-sidebar-list">
+                  {sectionItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = item.id === activeView;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => onSelect(item.id)}
+                        className={`shell-nav-button ${active ? "shell-nav-button-active" : ""}`}
+                        aria-label={item.label}
+                        title={item.label}
+                      >
+                        <span className="shell-nav-line" />
+                        <span className="shell-nav-icon">
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <span className="shell-nav-copy">
+                          <span className="shell-nav-title">{item.label}</span>
+                          <span className="shell-nav-description">{item.description}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="shell-sidebar-footer">
+          <button type="button" className="shell-sidebar-utility" onClick={onOpenPalette}>
+            <Search className="h-4 w-4" />
+            <span>Paleta de comando</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+          <button type="button" className="shell-sidebar-utility" onClick={onHelp}>
+            <HelpCircle className="h-4 w-4" />
+            <span>Ajuda e novidades</span>
+          </button>
+        </div>
       </div>
     </aside>
   );
 }
 
-function InteractiveOrb({ onBriefing }: { onBriefing: () => void }) {
+function Topbar({
+  activeView,
+  ownerName,
+  dashboard,
+  runtimeStatus,
+  pendingConfirmation,
+  isConversationActive,
+  isRefreshing,
+  onRefresh,
+  onOpenPalette,
+  onOpenSettings,
+}: {
+  activeView: ViewId;
+  ownerName: string;
+  dashboard: DashboardPayload | null;
+  runtimeStatus: RuntimeStatus | null;
+  pendingConfirmation: string | null;
+  isConversationActive: boolean;
+  isRefreshing: boolean;
+  onRefresh: () => void;
+  onOpenPalette: () => void;
+  onOpenSettings: () => void;
+}) {
+  const activeItem = navItems.find((item) => item.id === activeView) ?? navItems[0];
+  const score = dashboard?.health.score ?? 0;
+  const healthLabel = pendingConfirmation ? "Aguardando confirmacao" : score >= 80 ? "Online" : score >= 60 ? "Estavel" : "Atencao";
+  const moduleMap = new Map((dashboard?.modules ?? []).map((item) => [item.id, item]));
+  const chatReady = moduleMap.get("chat")?.configured;
+  const voiceValue = isConversationActive ? "Ativa" : moduleMap.get("voice")?.status === "online" ? "Pronta" : "Parcial";
+  const apiPort = (() => {
+    try {
+      const parsed = new URL(apiBase);
+      return parsed.port || (parsed.protocol === "https:" ? "443" : "80");
+    } catch {
+      return "8001";
+    }
+  })();
+  const liveSignals = [
+    { label: "IA", value: chatReady ? "OK" : "Pendente", tone: chatReady ? "online" : "warning" },
+    { label: "Voz", value: voiceValue, tone: isConversationActive ? "online" : moduleMap.get("voice")?.tone ?? "sky" },
+    { label: "API", value: apiPort, tone: "sky" },
+    { label: "CPU", value: `${runtimeStatus?.cpu ?? 0}%`, tone: (runtimeStatus?.cpu ?? 0) >= 75 ? "warning" : "online" },
+    { label: "RAM", value: `${runtimeStatus?.ram ?? 0}%`, tone: (runtimeStatus?.ram ?? 0) >= 80 ? "warning" : "online" },
+  ];
+
+  return (
+    <header className="shell-topbar">
+      <div>
+        <p className="shell-eyebrow text-[#78d8ff]">Nexus cockpit</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <h1 className="shell-display text-3xl font-semibold text-white">{activeItem.label}</h1>
+          <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-400">
+            Sistema online, {ownerName}.
+          </span>
+        </div>
+        <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-400">{activeItem.description}</p>
+      </div>
+
+      <div className="shell-topbar-actions">
+        <div className="shell-topbar-signal-row">
+          {liveSignals.map((signal) => (
+            <div key={signal.label} className="shell-mini-badge">
+              <span className={`shell-mini-badge-dot ${toneClass(signal.tone)}`} />
+              <span className="shell-mini-badge-label">{signal.label}</span>
+              <span className="shell-mini-badge-value">{signal.value}</span>
+            </div>
+          ))}
+        </div>
+        <StatusPill
+          label="Status"
+          value={healthLabel}
+          tone={pendingConfirmation ? "warning" : score >= 80 ? "online" : score >= 60 ? "sky" : "warning"}
+        />
+        <StatusPill label="Saude" value={`${score || "--"}%`} tone={score >= 80 ? "online" : score >= 60 ? "sky" : "warning"} />
+        <button type="button" className="shell-topbar-action shell-topbar-action-primary" onClick={onOpenPalette}>
+          <Grip className="h-4 w-4" />
+          <span>Command palette</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+        <button type="button" className="shell-topbar-action" onClick={onRefresh}>
+          <RefreshCcw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-[#54d8ff]" : "text-slate-300"}`} />
+          <span>{isRefreshing ? "Sincronizando" : "Atualizar"}</span>
+        </button>
+        <button type="button" className="shell-topbar-action" onClick={onOpenSettings}>
+          <Settings className="h-4 w-4 text-slate-300" />
+          <span>Config</span>
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function CommandPalette({
+  open,
+  query,
+  actions,
+  activeIndex,
+  onQueryChange,
+  onActiveIndexChange,
+  onSelect,
+  onClose,
+}: {
+  open: boolean;
+  query: string;
+  actions: PaletteAction[];
+  activeIndex: number;
+  onQueryChange: (value: string) => void;
+  onActiveIndexChange: (index: number) => void;
+  onSelect: (action: PaletteAction) => void;
+  onClose: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const timerId = window.setTimeout(() => inputRef.current?.focus(), 10);
+    return () => window.clearTimeout(timerId);
+  }, [open]);
+
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="shell-command-palette-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          className="shell-command-palette"
+          initial={{ opacity: 0, y: 18, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 12, scale: 0.98 }}
+          transition={{ duration: 0.22 }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="shell-command-search">
+            <Search className="h-5 w-5 text-[#78d8ff]" />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  onClose();
+                  return;
+                }
+                if (!actions.length) {
+                  return;
+                }
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  onActiveIndexChange((activeIndex + 1) % actions.length);
+                  return;
+                }
+                if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  onActiveIndexChange((activeIndex - 1 + actions.length) % actions.length);
+                  return;
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  const nextAction = actions[activeIndex] ?? actions[0];
+                  if (nextAction) {
+                    onSelect(nextAction);
+                  }
+                }
+              }}
+              placeholder="O que voce quer fazer agora?"
+            />
+            <kbd>ESC</kbd>
+          </div>
+
+          <div className="shell-command-results">
+            {actions.length ? (
+              actions.map((action, index) => {
+                const Icon = action.icon;
+                const active = index === activeIndex;
+                return (
+                  <button
+                    key={action.id}
+                    type="button"
+                    className={`shell-command-item ${active ? "shell-command-item-active" : ""}`}
+                    onMouseEnter={() => onActiveIndexChange(index)}
+                    onClick={() => onSelect(action)}
+                  >
+                    <span className="shell-command-item-icon">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="shell-command-item-copy">
+                      <span className="shell-command-item-label">{action.label}</span>
+                      <span className="shell-command-item-description">{action.description}</span>
+                    </span>
+                    <span className="shell-command-item-kicker">{action.hint ?? "acao"}</span>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="shell-command-empty">
+                Nenhum resultado encontrado. Tente por modulo, acao ou comando de voz.
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+function InteractiveOrb({
+  onBriefing,
+  state,
+  ownerName,
+}: {
+  onBriefing: () => void;
+  state: OrbVisualState;
+  ownerName: string;
+}) {
   const prefersReducedMotion = useReducedMotion();
   const [hasFinePointer, setHasFinePointer] = useState(true);
   const [isBlinking, setIsBlinking] = useState(false);
@@ -1059,7 +1839,55 @@ function InteractiveOrb({ onBriefing }: { onBriefing: () => void }) {
   const focusScale = useTransform(hoverStrength, [0, 1], [1, 1.08]);
   const focusOpacity = useTransform(hoverStrength, [0, 1], [0.22, 0.56]);
   const pupilScale = useTransform(hoverStrength, [0, 1], [1, 0.91]);
-  const scannerDuration = prefersReducedMotion ? 0 : 7.4;
+  const stateCopy: Record<OrbVisualState, { eyebrow: string; label: string; description: string }> = {
+    idle: {
+      eyebrow: "nexus dormindo",
+      label: "Aguardando seu proximo comando",
+      description: `Sistema pronto, ${ownerName}. Peca para o Nexus executar, analisar ou criar algo.`,
+    },
+    listening: {
+      eyebrow: "nexus ouvindo",
+      label: "Captando voz e contexto",
+      description: "Microfone e comando rapido ativos. Diga o que voce quer fazer agora.",
+    },
+    thinking: {
+      eyebrow: "nexus pensando",
+      label: "Organizando resposta e proximos passos",
+      description: "Analisando a solicitacao antes de agir para reduzir ruido e erro operacional.",
+    },
+    executing: {
+      eyebrow: "nexus executando",
+      label: "Disparando fluxo supervisionado",
+      description: "Aplicando a acao atual com contexto, feedback e seguranca visual.",
+    },
+    confirming: {
+      eyebrow: "confirmacao necessaria",
+      label: "Esperando sua aprovacao",
+      description: "Acao sensivel detectada. Revise o que foi entendido antes de continuar.",
+    },
+    success: {
+      eyebrow: "concluido",
+      label: "Comando finalizado com sucesso",
+      description: "Resultado confirmado. O Nexus pode continuar a partir daqui.",
+    },
+    error: {
+      eyebrow: "erro detectado",
+      label: "Nao consegui concluir a acao",
+      description: "Revise o motivo exibido no cockpit para corrigir ou tentar novamente.",
+    },
+  };
+  const stateToneClass: Record<OrbVisualState, string> = {
+    idle: "text-[#78d8ff]",
+    listening: "text-[#54d8ff]",
+    thinking: "text-[#9e83ff]",
+    executing: "text-[#2fe1b1]",
+    confirming: "text-[#f0bb50]",
+    success: "text-[#2fe1b1]",
+    error: "text-[#f37588]",
+  };
+  const currentState = stateCopy[state];
+  const scannerDuration =
+    prefersReducedMotion ? 0 : state === "executing" ? 3.8 : state === "thinking" ? 5 : state === "listening" ? 6.2 : 7.4;
 
   return (
     <div
@@ -1157,7 +1985,7 @@ function InteractiveOrb({ onBriefing }: { onBriefing: () => void }) {
         }}
         animate={prefersReducedMotion ? undefined : { scale: [1, 1.012, 1] }}
         transition={prefersReducedMotion ? undefined : { duration: 4.8, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }}
-        className="orb-core"
+        className={`orb-core orb-state-${state}`}
       >
         <motion.div
           className="orb-core-aura"
@@ -1199,8 +2027,8 @@ function InteractiveOrb({ onBriefing }: { onBriefing: () => void }) {
           ) : null}
         </AnimatePresence>
         <div className="mx-auto flex flex-col items-center justify-center gap-4 px-4 text-center">
-          <p className="shell-eyebrow text-center">boa tarde</p>
-          <div className="nexus-eye-shell">
+          <p className={`shell-eyebrow text-center ${stateToneClass[state]}`}>{currentState.eyebrow}</p>
+          <div className={`nexus-eye-shell orb-shell-${state}`}>
             <motion.div
               className="nexus-eye"
               animate={{
@@ -1241,9 +2069,13 @@ function InteractiveOrb({ onBriefing }: { onBriefing: () => void }) {
                 : null}
             </motion.div>
           </div>
+          <div className="max-w-[240px]">
+            <p className={`text-sm font-semibold ${stateToneClass[state]}`}>{currentState.label}</p>
+            <p className="mt-2 text-xs leading-6 text-slate-400">{currentState.description}</p>
+          </div>
           <button type="button" className="orb-briefing" onClick={onBriefing}>
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>ver briefing diário</span>
+            <span>ver briefing diario</span>
           </button>
         </div>
       </motion.div>
@@ -1418,6 +2250,9 @@ function ChatLanding({
   attachments,
   isSending,
   isConversationActive,
+  naturalConversationActive,
+  naturalConversationState,
+  naturalConversationSpeakingLevel,
   isDictating,
   isSpeaking,
   voiceSupported,
@@ -1430,11 +2265,18 @@ function ChatLanding({
   onSpeakLastResponse,
   onRemoveAttachment,
   onQuickAction,
+  onOpenConversation,
   onSend,
   onConfirmPending,
+  onCancelPending,
   onBriefing,
   onOpenUpdates,
   onOpenFinance,
+  onOpenAutomation,
+  onOpenProgramming,
+  onOpenVision,
+  onOpenMind,
+  ownerName,
 }: {
   dashboard: DashboardPayload | null;
   messages: ChatMessage[];
@@ -1442,6 +2284,9 @@ function ChatLanding({
   attachments: AttachmentDraft[];
   isSending: boolean;
   isConversationActive: boolean;
+  naturalConversationActive: boolean;
+  naturalConversationState: OrbState;
+  naturalConversationSpeakingLevel: number;
   isDictating: boolean;
   isSpeaking: boolean;
   voiceSupported: boolean;
@@ -1454,13 +2299,76 @@ function ChatLanding({
   onSpeakLastResponse: () => void;
   onRemoveAttachment: (id: string) => void;
   onQuickAction: (value: string) => void;
+  onOpenConversation: () => void;
   onSend: () => void;
   onConfirmPending: () => void;
+  onCancelPending: () => void;
   onBriefing: () => void;
   onOpenUpdates: () => void;
   onOpenFinance: () => void;
+  onOpenAutomation: () => void;
+  onOpenProgramming: () => void;
+  onOpenVision: () => void;
+  onOpenMind: () => void;
+  ownerName: string;
 }) {
   const conversationCards = useMemo(() => buildConversationCards(messages), [messages]);
+  const latestUserMessage = useMemo(
+    () => [...messages].reverse().find((message) => message.role === "user" && sanitizeChatText(message.content)) ?? null,
+    [messages],
+  );
+  const latestAssistantMessage = useMemo(
+    () => [...messages].reverse().find((message) => message.role === "assistant" && sanitizeChatText(message.content)) ?? null,
+    [messages],
+  );
+  const latestSystemMessage = useMemo(() => [...messages].reverse().find((message) => message.role === "system") ?? null, [messages]);
+  const moduleMap = useMemo(() => new Map((dashboard?.modules ?? []).map((module) => [module.id, module])), [dashboard?.modules]);
+  const blockedModules = useMemo(
+    () => (dashboard?.modules ?? []).filter((module) => ["offline", "blocked"].includes(module.status)),
+    [dashboard?.modules],
+  );
+  const voiceConversationActive = isConversationActive || naturalConversationActive;
+  const commandCenterState = pendingConfirmation
+    ? "Aguardando confirmacao"
+    : isSending
+      ? "Executando"
+      : isDictating
+        ? "Ouvindo"
+        : naturalConversationActive
+          ? describeNaturalConversationState(naturalConversationState)
+          : isConversationActive
+            ? "Conversa por voz ativa"
+            : isSpeaking
+              ? "Respondendo por voz"
+              : "Pronto";
+  const generalStatus = blockedModules.length ? "Atencao" : dashboard?.health.score && dashboard.health.score >= 75 ? "Online" : "Estavel";
+  const moduleStatusItems = [
+    { label: "IA", value: moduleMap.get("chat")?.configured ? "Conectada" : "Pendente", tone: moduleMap.get("chat")?.tone ?? "amber" },
+    { label: "Voz", value: isDictating || voiceConversationActive ? "Ativa" : moduleMap.get("voice")?.status === "online" ? "Pronta" : "Parcial", tone: isDictating || voiceConversationActive ? "lime" : moduleMap.get("voice")?.tone ?? "amber" },
+    { label: "Memoria", value: moduleMap.get("memory")?.status === "online" ? "Ativa" : moduleMap.get("memory")?.status === "offline" ? "Offline" : "Parcial", tone: moduleMap.get("memory")?.tone ?? "sky" },
+    { label: "Visao", value: moduleMap.get("vision")?.status === "online" ? "Pronta" : "Parcial", tone: moduleMap.get("vision")?.tone ?? "amber" },
+    { label: "Automacao PC", value: moduleMap.get("automation")?.status === "guarded" ? "Protegida" : moduleMap.get("automation")?.status, tone: moduleMap.get("automation")?.tone ?? "orange" },
+    { label: "Coder", value: moduleMap.get("coder")?.status === "ready" ? "Pronto" : moduleMap.get("coder")?.status ?? "Parcial", tone: moduleMap.get("coder")?.tone ?? "amber" },
+    { label: "NexusMind", value: moduleMap.get("mind")?.detail?.includes("supervisionado") ? "Supervisionado" : moduleMap.get("mind")?.status ?? "Pausado", tone: moduleMap.get("mind")?.tone ?? "amber" },
+  ];
+  const operationalPreview = {
+    heard: pendingConfirmation || sanitizeChatText(latestUserMessage?.content ?? command),
+    understood: latestAssistantMessage?.meta ?? "",
+    doing: describeUnderstoodIntent(latestAssistantMessage?.meta),
+  };
+  const orbState: OrbVisualState = pendingConfirmation
+    ? "confirming"
+    : isSending
+      ? "executing"
+      : isDictating || voiceConversationActive
+        ? "listening"
+        : latestSystemMessage?.meta?.includes("error")
+          ? "error"
+          : isSpeaking
+            ? "thinking"
+            : latestAssistantMessage?.meta && latestAssistantMessage.meta !== "bootstrap"
+              ? "success"
+              : "idle";
 
   return (
     <section className="relative flex min-h-[calc(100vh-3rem)] flex-col overflow-hidden px-4 py-8 sm:px-6 lg:px-12 lg:py-10">
@@ -1480,6 +2388,93 @@ function ChatLanding({
       </div>
 
       <div className="relative z-10 mx-auto flex w-full max-w-[1180px] flex-col items-center">
+        <ShellCard className="mb-6 w-full max-w-[1160px] overflow-hidden border border-white/10 bg-[#07111b]/80">
+          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+            <div>
+              <p className="shell-eyebrow text-[#78d8ff]">NEXUS COMMAND CENTER</p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <h1 className="shell-display text-4xl font-semibold text-white">Centro de comando premium</h1>
+                <span className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.24em] ${blockedModules.length ? "border-[#624154] bg-[#24141c] text-[#f0bb50]" : "border-[#1f4f4a] bg-[#10211d] text-[#2fe1b1]"}`}>
+                  Status geral: {generalStatus}
+                </span>
+              </div>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
+                Command center inicial do Nexus com estado dos modulos, acao rapida por dominio e leitura operacional do que ele ouviu, entendeu e vai executar.
+              </p>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {moduleStatusItems.map((item) => (
+                  <div key={item.label} className="rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-4">
+                    <p className="shell-eyebrow">{item.label}</p>
+                    <p className={`mt-2 text-lg font-semibold ${toneClass(item.tone)}`}>{item.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button type="button" className="shell-primary-button" onClick={() => document.getElementById("nexus-chat-dock")?.scrollIntoView({ behavior: "smooth", block: "center" })}>
+                  Conversar
+                </button>
+                <button type="button" className="shell-chip" onClick={onOpenAutomation}>
+                  Automatizar PC
+                </button>
+                <button type="button" className="shell-chip" onClick={onOpenProgramming}>
+                  Programar
+                </button>
+                <button type="button" className="shell-chip" onClick={onOpenVision}>
+                  Analisar Tela
+                </button>
+                <button type="button" className="shell-chip" onClick={onOpenMind}>
+                  Melhorar Nexus
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-4">
+              <div className="rounded-[26px] border border-white/8 bg-black/10 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="shell-eyebrow">estado operacional</p>
+                  <span className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.24em] ${pendingConfirmation ? "border-[#664e25] bg-[#23190b] text-[#f0bb50]" : isSending || isDictating ? "border-[#1f4f4a] bg-[#10211d] text-[#2fe1b1]" : "border-[#1d3d57] bg-[#0c1824] text-[#54d8ff]"}`}>
+                    {commandCenterState}
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] p-4">
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Ouvi</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-200">{operationalPreview.heard || "Aguardando o proximo comando."}</p>
+                  </div>
+                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] p-4">
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Entendi</p>
+                    <p className="mt-2 font-mono text-sm text-[#78d8ff]">{operationalPreview.understood || "sem classificacao ainda"}</p>
+                  </div>
+                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] p-4">
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Vou fazer</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-200">{operationalPreview.doing}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-[26px] border border-white/8 bg-black/10 p-5">
+                <p className="shell-eyebrow">alertas atuais</p>
+                <div className="mt-4 space-y-3 text-sm text-slate-300">
+                  {blockedModules.length ? (
+                    blockedModules.slice(0, 3).map((module) => (
+                      <div key={module.id} className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                        <p className="text-white">{module.title}</p>
+                        <p className="mt-1 text-slate-400">{module.detail}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-[18px] border border-[#1f4f4a] bg-[#10211d] px-4 py-3 text-[#bdf5e5]">
+                      Nenhum bloqueio critico no momento. O Nexus esta pronto para operar.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </ShellCard>
+
         <div className="mb-6 flex w-full max-w-4xl flex-wrap items-center justify-center gap-3">
           {quickActionItems.map((item) => (
             <button key={item.command} type="button" onClick={() => onQuickAction(item.command)} className="shell-chip">
@@ -1488,14 +2483,25 @@ function ChatLanding({
           ))}
         </div>
 
-        <InteractiveOrb onBriefing={onBriefing} />
+        {naturalConversationActive ? (
+          <div className="flex flex-col items-center gap-4">
+            <div className="rounded-full border border-white/10 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.08),transparent_70%)] p-4 shadow-[0_0_60px_rgba(16,185,225,0.16)]">
+              <NexusParticleOrb state={naturalConversationState} speakingLevel={naturalConversationSpeakingLevel} size={220} />
+            </div>
+            <button type="button" onClick={onOpenConversation} className="shell-chip">
+              Abrir Modo Jarvis
+            </button>
+          </div>
+        ) : (
+          <InteractiveOrb onBriefing={onBriefing} state={orbState} ownerName={ownerName} />
+        )}
 
-        <div className="-mt-10 w-full max-w-4xl">
+        <div id="nexus-chat-dock" className="-mt-10 w-full max-w-4xl">
           <ChatCommandDock
             command={command}
             attachments={attachments}
             isSending={isSending}
-            isConversationActive={isConversationActive}
+            isConversationActive={voiceConversationActive}
             isDictating={isDictating}
             isSpeaking={isSpeaking}
             voiceSupported={voiceSupported}
@@ -1522,6 +2528,9 @@ function ChatLanding({
             </button>
             <button type="button" onClick={onOpenUpdates} className="shell-inline-action !rounded-2xl !py-3 text-center">
               Ver novidades
+            </button>
+            <button type="button" onClick={onOpenConversation} className="shell-inline-action !rounded-2xl !py-3 text-center">
+              Abrir Modo Jarvis
             </button>
             <button type="button" onClick={() => document.getElementById("quick-flows")?.scrollIntoView({ behavior: "smooth", block: "start" })} className="shell-inline-action !rounded-2xl !py-3 text-center">
               Abrir central de comandos
@@ -1573,11 +2582,45 @@ function ChatLanding({
             </ShellCard>
 
             {pendingConfirmation ? (
-              <ShellCard eyebrow="Confirmação" title="Ação aguardando resposta">
-                <p className="text-sm leading-6 text-slate-200">{pendingConfirmation}</p>
-                <button type="button" onClick={onConfirmPending} className="mt-4 shell-primary-button">
-                  Confirmar comando
-                </button>
+              <ShellCard eyebrow="Pre-visualizacao" title="Acao aguardando aprovacao">
+                <div className="space-y-4">
+                  <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
+                    <p className="shell-eyebrow">voce pediu</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-200">{pendingConfirmation}</p>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
+                      <p className="shell-eyebrow">eu entendi</p>
+                      <p className="mt-3 font-mono text-sm text-[#78d8ff]">{latestAssistantMessage?.meta ?? "sem rota calculada"}</p>
+                    </div>
+                    <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
+                      <p className="shell-eyebrow">risco</p>
+                      <p
+                        className={`mt-3 text-sm font-semibold ${
+                          inferCommandRisk(pendingConfirmation) === "Alto"
+                            ? "text-[#f37588]"
+                            : inferCommandRisk(pendingConfirmation) === "Medio"
+                              ? "text-[#f0bb50]"
+                              : "text-[#2fe1b1]"
+                        }`}
+                      >
+                        {inferCommandRisk(pendingConfirmation)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
+                    <p className="shell-eyebrow">vou fazer</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-200">{describeUnderstoodIntent(latestAssistantMessage?.meta)}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <button type="button" onClick={onConfirmPending} className="shell-primary-button">
+                      Executar
+                    </button>
+                    <button type="button" onClick={onCancelPending} className="shell-chip">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
               </ShellCard>
             ) : (
               <ShellCard eyebrow="Ações rápidas" title="Fluxos prontos" className="flex flex-col">
@@ -1722,9 +2765,12 @@ function BrainView({
     }))
     .sort((left, right) => right.degree - left.degree)[0];
   const labels = {
-    brain: "Mapa completo da memoria do Nexus, com notas reais, tags, areas e ligacoes do vault.",
-    diary: "Filtro focado no diario para navegar pensamentos por contexto e backlinks.",
-    dump: "Filtro do brain dump para capturar ideias soltas e como elas se conectam.",
+    brain: "Mapa completo do Nexus Brain com notas, tags, areas e o novo cluster financeiro integrado ao vault.",
+    notes: "Filtro focado nas notas reais do Obsidian para navegar areas, caminhos e relacoes principais.",
+    tags: "Filtro de navegacao por tags e backlinks para revelar padroes no conhecimento registrado.",
+    finance: "Vista financeira do cerebro com contas, categorias, transacoes, boletos e metas no mesmo grafo.",
+    projects: "Filtro voltado a projetos e repositorios, destacando conhecimento tecnico e contexto de desenvolvimento.",
+    tasks: "Filtro para notas orientadas a tarefas, backlog, roadmap e prazos recorrentes.",
   };
 
   useEffect(() => {
@@ -1938,9 +2984,12 @@ function BrainView({
             </div>
             <div className="flex flex-wrap gap-2">
               {[
-                ["brain", "Cerebro"],
-                ["diary", "Diario"],
-                ["dump", "Brain dump"],
+                ["brain", "Geral"],
+                ["notes", "Notas"],
+                ["tags", "Tags"],
+                ["finance", "Financeiro"],
+                ["projects", "Projetos"],
+                ["tasks", "Tarefas"],
               ].map(([value, label]) => (
                 <button
                   key={value}
@@ -2247,7 +3296,17 @@ function BrainView({
                     ? "Area da memoria. Use para focar uma pasta inteira e navegar pelas notas relacionadas."
                     : selected?.nodeType === "note"
                       ? "Nota real do Obsidian. Aqui voce consegue ver backlinks, saidas e tags conectadas."
-                      : "Tag usada para agrupar conhecimento e revelar padroes no grafo."}
+                      : selected?.nodeType === "tag"
+                        ? "Tag usada para agrupar conhecimento e revelar padroes no grafo."
+                        : selected?.nodeType === "finance"
+                          ? "Raiz financeira do Nexus Brain. Ela conecta contas, categorias, metas e historico de movimentacoes."
+                          : selected?.nodeType === "account"
+                            ? "Conta financeira usada para agrupar lancamentos e vencimentos dentro do cerebro."
+                            : selected?.nodeType === "category"
+                              ? "Categoria financeira conectando despesas, receitas e boletos relacionados."
+                              : selected?.nodeType === "goal"
+                                ? "Meta financeira com progresso visual dentro do grafo do Nexus."
+                                : "Registro financeiro conectado ao cerebro para explicar contexto, gasto e historico."}
               </p>
               <div className="rounded-[20px] border border-white/6 bg-white/[0.02] p-4">
                 <p className="shell-eyebrow">caminho</p>
@@ -2257,7 +3316,25 @@ function BrainView({
                 <div className="rounded-[20px] border border-white/6 bg-white/[0.02] p-4">
                   <p className="shell-eyebrow">tipo</p>
                   <p className="mt-3 text-lg font-semibold text-[#54d8ff]">
-                    {selected?.nodeType === "vault" ? "vault" : selected?.nodeType === "area" ? "area" : selected?.nodeType === "note" ? "nota" : "tag"}
+                    {selected?.nodeType === "vault"
+                      ? "vault"
+                      : selected?.nodeType === "area"
+                        ? "area"
+                        : selected?.nodeType === "note"
+                          ? "nota"
+                          : selected?.nodeType === "tag"
+                            ? "tag"
+                            : selected?.nodeType === "finance"
+                              ? "financeiro"
+                              : selected?.nodeType === "account"
+                                ? "conta"
+                                : selected?.nodeType === "category"
+                                  ? "categoria"
+                                  : selected?.nodeType === "goal"
+                                    ? "meta"
+                                    : selected?.nodeType === "bill"
+                                      ? "conta"
+                                      : "transacao"}
                   </p>
                 </div>
                 <div className="rounded-[20px] border border-white/6 bg-white/[0.02] p-4">
@@ -2486,6 +3563,252 @@ function TasksView({ modules }: { modules: DashboardModule[] }) {
   );
 }
 
+function ModulePanelView({ modules, onOpenModule }: { modules: DashboardModule[]; onOpenModule: (moduleId: string) => void }) {
+  const [moduleFilter, setModuleFilter] = useState<ModuleHealthFilter>("all");
+
+  const onlineStatuses = new Set(["online", "ready"]);
+  const attentionStatuses = new Set(["guarded", "partial", "paused"]);
+  const blockedStatuses = new Set(["offline", "blocked"]);
+
+  const filteredModules = useMemo(() => {
+    return [...modules]
+      .filter((module) => {
+        if (moduleFilter === "online") {
+          return onlineStatuses.has(module.status);
+        }
+        if (moduleFilter === "attention") {
+          return attentionStatuses.has(module.status);
+        }
+        if (moduleFilter === "blocked") {
+          return blockedStatuses.has(module.status);
+        }
+        return true;
+      })
+      .sort((left, right) => {
+        const statusWeight = (status: string) => {
+          if (blockedStatuses.has(status)) {
+            return 0;
+          }
+          if (attentionStatuses.has(status)) {
+            return 1;
+          }
+          return 2;
+        };
+        return statusWeight(left.status) - statusWeight(right.status);
+      });
+  }, [attentionStatuses, blockedStatuses, moduleFilter, modules, onlineStatuses]);
+
+  const onlineCount = modules.filter((module) => onlineStatuses.has(module.status)).length;
+  const attentionCount = modules.filter((module) => attentionStatuses.has(module.status)).length;
+  const blockedCount = modules.filter((module) => blockedStatuses.has(module.status)).length;
+  const configuredCount = modules.filter((module) => module.configured).length;
+
+  const moduleIcon = (moduleId: string) => {
+    switch (moduleId) {
+      case "api":
+        return MonitorUp;
+      case "voice":
+        return Mic;
+      case "vision":
+        return Eye;
+      case "automation":
+        return SlidersHorizontal;
+      case "coder":
+        return FolderKanban;
+      case "memory":
+        return Brain;
+      case "integrations":
+        return Headphones;
+      case "mind":
+        return Sparkles;
+      default:
+        return MessageCircle;
+    }
+  };
+
+  const toneShellClass = (tone: DashboardModule["tone"]) => {
+    switch (tone) {
+      case "lime":
+        return "border-[#163a33] bg-[#0d1f1a]/80";
+      case "amber":
+        return "border-[#3d3117] bg-[#21180b]/80";
+      case "orange":
+        return "border-[#4b2812] bg-[#241409]/80";
+      case "rose":
+        return "border-[#472130] bg-[#23111a]/80";
+      case "sky":
+        return "border-[#153042] bg-[#0b1723]/80";
+      default:
+        return "border-[#163444] bg-[#0d1824]/80";
+    }
+  };
+
+  const toneTextClass = (tone: DashboardModule["tone"]) => {
+    switch (tone) {
+      case "lime":
+        return "text-[#2fe1b1]";
+      case "amber":
+        return "text-[#f0bb50]";
+      case "orange":
+        return "text-[#f38c3f]";
+      case "rose":
+        return "text-[#f37588]";
+      case "sky":
+        return "text-[#78d8ff]";
+      default:
+        return "text-[#54d8ff]";
+    }
+  };
+
+  return (
+    <section className="space-y-6 px-4 py-8 lg:px-12">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-4xl font-semibold text-white">Painel dos modulos</h2>
+          <p className="mt-2 text-sm uppercase tracking-[0.3em] text-[#54d8ff]">estado real do nexus</p>
+        </div>
+        <div className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs uppercase tracking-[0.24em] text-slate-400">
+          {configuredCount}/{modules.length} configurados
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        {[
+          ["online", String(onlineCount), "#2fe1b1", "operando sem bloqueio"],
+          ["atencao", String(attentionCount), "#f0bb50", "pedem revisao ou confirmacao"],
+          ["bloqueios", String(blockedCount), "#f37588", "dependencias ou permissoes pendentes"],
+          ["prontos", String(configuredCount), "#54d8ff", "com configuracao essencial fechada"],
+        ].map(([label, value, color, hint]) => (
+          <ShellCard key={label}>
+            <p className="shell-eyebrow">{label}</p>
+            <p className="mt-3 text-5xl font-semibold" style={{ color }}>
+              {value}
+            </p>
+            <p className="mt-3 text-sm text-slate-400">{hint}</p>
+          </ShellCard>
+        ))}
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
+        <ShellCard>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              {[
+                ["all", "Todos"],
+                ["online", "Online"],
+                ["attention", "Atencao"],
+                ["blocked", "Bloqueados"],
+              ].map(([value, label]) => (
+                <button key={value} type="button" className={`shell-chip ${moduleFilter === value ? "shell-chip-active" : ""}`} onClick={() => setModuleFilter(value as ModuleHealthFilter)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-sm text-slate-400">{filteredModules.length} modulos visiveis</p>
+          </div>
+
+          <div className="grid gap-4">
+            {filteredModules.map((module) => {
+              const Icon = moduleIcon(module.id);
+              return (
+                <article key={module.id} className={`rounded-[28px] border p-5 ${toneShellClass(module.tone)}`}>
+                  <div className="grid gap-5 xl:grid-cols-[1.15fr_0.9fr_0.7fr_auto]">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <span className={`flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] ${toneTextClass(module.tone)}`}>
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <div>
+                          <p className="shell-eyebrow">{module.sector}</p>
+                          <h3 className="mt-1 text-xl font-semibold text-white">{module.title}</h3>
+                        </div>
+                      </div>
+                      <p className="mt-4 text-sm leading-6 text-slate-300">{module.description}</p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {module.examples.map((example) => (
+                          <span key={example} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300">
+                            {example}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="rounded-[20px] border border-white/8 bg-black/10 p-4">
+                        <p className="shell-eyebrow">status</p>
+                        <p className={`mt-3 text-lg font-semibold ${toneTextClass(module.tone)}`}>{module.status}</p>
+                      </div>
+                      <div className="rounded-[20px] border border-white/8 bg-black/10 p-4">
+                        <p className="shell-eyebrow">problema / estado atual</p>
+                        <p className="mt-3 text-sm leading-6 text-slate-300">{module.detail}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="rounded-[20px] border border-white/8 bg-black/10 p-4">
+                        <p className="shell-eyebrow">permissao</p>
+                        <p className="mt-3 text-sm leading-6 text-slate-300">{module.permission}</p>
+                      </div>
+                      <div className="rounded-[20px] border border-white/8 bg-black/10 p-4">
+                        <p className="shell-eyebrow">configuracao</p>
+                        <p className={`mt-3 text-sm font-semibold ${module.configured ? "text-[#2fe1b1]" : "text-[#f0bb50]"}`}>
+                          {module.configured ? "essencial concluido" : "precisa de ajuste"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col justify-between gap-3">
+                      <button type="button" className="shell-primary-button whitespace-nowrap" onClick={() => onOpenModule(module.id)}>
+                        {module.action_label}
+                      </button>
+                      <span className="text-right text-xs uppercase tracking-[0.24em] text-slate-500">{module.id}</span>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </ShellCard>
+
+        <div className="grid gap-5">
+          <ShellCard eyebrow="sprint 1" title="Prioridade imediata">
+            <div className="space-y-4 text-sm leading-7 text-slate-300">
+              <p>
+                O painel agora mostra onde o Nexus esta realmente pronto e onde ainda falta configuracao, permissao ou endurecimento de produto.
+              </p>
+              <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
+                <p className="shell-eyebrow">ordem recomendada</p>
+                <div className="mt-3 space-y-2">
+                  <p>1. Fechar API local com token e origem local.</p>
+                  <p>2. Revisar modulos em atencao e pendencias de integracao.</p>
+                  <p>3. Manter NexusMind supervisionado ate diff + branch + aprovacao.</p>
+                </div>
+              </div>
+            </div>
+          </ShellCard>
+
+          <ShellCard eyebrow="auditoria rapida" title="Leitura executiva">
+            <div className="space-y-3 text-sm text-slate-300">
+              <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
+                <p className="text-white">Online</p>
+                <p className="mt-1">{onlineCount} modulos ja operam com base confiavel.</p>
+              </div>
+              <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
+                <p className="text-white">Atencao</p>
+                <p className="mt-1">{attentionCount} areas pedem configuracao, revisao de permissao ou confirmacao.</p>
+              </div>
+              <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
+                <p className="text-white">Bloqueios</p>
+                <p className="mt-1">{blockedCount} modulos ainda dependem de chave, vault ou liberacao explicita.</p>
+              </div>
+            </div>
+          </ShellCard>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function RemindersView({ onQuickReminder }: { onQuickReminder: () => void }) {
   const [reminderKindFilter, setReminderKindFilter] = useState<"all" | "normal" | "recurring">("all");
   const [reminderTab, setReminderTab] = useState<ReminderTab>("expired");
@@ -2615,151 +3938,303 @@ function RemindersView({ onQuickReminder }: { onQuickReminder: () => void }) {
 
 function FinanceView() {
   const [financeFilter, setFinanceFilter] = useState<FinanceFilter>("all");
-  const [selectedFinanceDay, setSelectedFinanceDay] = useState(11);
-  const [projectionEnabled, setProjectionEnabled] = useState(false);
-  const [lateOnly, setLateOnly] = useState(false);
-  const bankOptions = useMemo(() => ["Banco: Todos", ...Array.from(new Set(financeRows.map((row) => `Banco: ${splitFinanceCategory(row.category).bank}`)))], []);
-  const categoryOptions = useMemo(() => ["Categoria: Todas", ...Array.from(new Set(financeRows.map((row) => `Categoria: ${splitFinanceCategory(row.category).group}`)))], []);
-  const movementOptions = ["Tipo: Todos", "Tipo: Entradas", "Tipo: Saidas"];
-  const [bankFilter, setBankFilter] = useState(bankOptions[0] ?? "Banco: Todos");
-  const [categoryFilter, setCategoryFilter] = useState(categoryOptions[0] ?? "Categoria: Todas");
-  const [movementFilter, setMovementFilter] = useState("Tipo: Todos");
+  const [summary, setSummary] = useState<FinanceSummary | null>(null);
+  const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
+  const [bills, setBills] = useState<FinanceBill[]>([]);
+  const [goals, setGoals] = useState<FinanceGoal[]>([]);
+  const [chart, setChart] = useState<FinanceMonthlyChart | null>(null);
+  const [categories, setCategories] = useState<FinanceCategoryBreakdown | null>(null);
+  const [selectedFinanceDate, setSelectedFinanceDate] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const filteredFinance = financeRows.filter((item) => {
-    if (financeFilter !== "all" && item.type !== financeFilter) {
-      return false;
+  const loadFinance = useMemo(
+    () => async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const [nextSummary, nextTransactions, nextBills, nextGoals, nextChart, nextCategories] = await Promise.all([
+          fetchFinanceSummary(),
+          fetchFinanceTransactions(),
+          fetchFinanceBills(),
+          fetchFinanceGoals(),
+          fetchFinanceMonthlyChart(),
+          fetchFinanceCategories(),
+        ]);
+        setSummary(nextSummary);
+        setTransactions(nextTransactions);
+        setBills(nextBills);
+        setGoals(nextGoals);
+        setChart(nextChart);
+        setCategories(nextCategories);
+        setSelectedFinanceDate((current) => current || nextChart.points[nextChart.points.length - 1]?.date || "");
+      } catch (caughtError) {
+        setError(caughtError instanceof Error ? caughtError.message : "Nao consegui carregar o modulo financeiro.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    void loadFinance();
+  }, [loadFinance]);
+
+  const selectedPoint = useMemo(() => {
+    const points = chart?.points ?? [];
+    return points.find((point) => point.date === selectedFinanceDate) ?? points[points.length - 1] ?? null;
+  }, [chart?.points, selectedFinanceDate]);
+
+  const chartPath = useMemo(() => {
+    const points = chart?.points ?? [];
+    if (!points.length) {
+      return "";
     }
-    const meta = splitFinanceCategory(item.category);
-    if (bankFilter !== "Banco: Todos" && bankFilter !== `Banco: ${meta.bank}`) {
-      return false;
+    const balances = points.map((point) => point.balance);
+    const min = Math.min(...balances);
+    const max = Math.max(...balances);
+    const width = 720;
+    const height = 180;
+    return points
+      .map((point, index) => {
+        const x = points.length === 1 ? 20 : 20 + (index / (points.length - 1)) * (width - 40);
+        const ratio = max === min ? 0.5 : (point.balance - min) / (max - min);
+        const y = height - 20 - ratio * (height - 40);
+        return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+      })
+      .join(" ");
+  }, [chart?.points]);
+
+  const filteredTransactions = useMemo(() => {
+    if (financeFilter === "expenses") {
+      return transactions.filter((item) => item.type === "expense");
     }
-    if (categoryFilter !== "Categoria: Todas" && categoryFilter !== `Categoria: ${meta.group}`) {
-      return false;
+    if (financeFilter === "income") {
+      return transactions.filter((item) => item.type === "income");
     }
-    if (movementFilter === "Tipo: Entradas" && item.tone !== "income") {
-      return false;
-    }
-    if (movementFilter === "Tipo: Saidas" && item.tone !== "expense") {
-      return false;
-    }
-    if (lateOnly && !item.late) {
-      return false;
-    }
-    return true;
-  });
+    return transactions;
+  }, [financeFilter, transactions]);
+
+  const pendingBills = useMemo(() => bills.filter((item) => !item.paid), [bills]);
+  const highlightedBills = financeFilter === "pending" ? pendingBills : pendingBills.slice(0, 5);
+  const highlightedGoals = financeFilter === "goals" ? goals : goals.slice(0, 4);
 
   return (
     <section className="space-y-6 px-4 py-8 lg:px-12">
-      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.35fr]">
-        <ShellCard>
-          <p className="text-6xl font-light text-white">{projectionEnabled ? "R$ 612" : "R$ 331"}</p>
-          <div className="mt-7 h-1.5 rounded-full bg-[linear-gradient(90deg,rgba(57,217,255,0.58),rgba(243,117,136,0.58))]" />
-          <div className="mt-4 flex gap-6 text-sm">
-            <span className="text-[#54d8ff]">{projectionEnabled ? "R$ 2.804" : "R$ 2.404"}</span>
-            <span className="text-[#f4a0b1]">{projectionEnabled ? "R$ 2.192" : "R$ 2.073"}</span>
-          </div>
-        </ShellCard>
-
-        <ShellCard title="Maio 2026" right={<HelpCircle className="h-4 w-4 text-slate-400" />}>
-          <svg viewBox="0 0 720 180" className="h-40 w-full">
-            <path
-              d="M10 120 C 70 90, 90 150, 140 120 S 210 40, 250 118 S 330 120, 710 120"
-              fill="none"
-              stroke="rgba(45, 225, 203, 0.88)"
-              strokeWidth="3"
-            />
-            <path
-              d="M10 90 C 70 160, 90 102, 140 118 S 210 76, 250 120 S 330 120, 710 120"
-              fill="none"
-              stroke="rgba(244, 128, 152, 0.68)"
-              strokeWidth="2.5"
-            />
-            <line x1="250" y1="18" x2="250" y2="138" stroke="rgba(255,255,255,0.2)" strokeDasharray="4 6" />
-            <circle cx="250" cy="120" r="4" fill="rgba(244, 128, 152, 0.9)" />
-          </svg>
-        </ShellCard>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Saldo atual" value={summary ? formatCurrency(summary.current_balance) : "--"} detail="saldo consolidado das transacoes registradas" tone="sky" />
+        <MetricCard label="Entradas do mes" value={summary ? formatCurrency(summary.month_income) : "--"} detail="receitas confirmadas no mes atual" tone="lime" />
+        <MetricCard label="Saidas do mes" value={summary ? formatCurrency(summary.month_expense) : "--"} detail="despesas registradas no mes atual" tone="rose" />
+        <MetricCard label="Livre ate o fim do mes" value={summary ? formatCurrency(summary.available_until_month_end) : "--"} detail="saldo menos contas pendentes do mes" tone="amber" />
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         {[
-          ["all", "Todas"],
-          ["variable", "Variaveis"],
-          ["recurring", "Recorrentes"],
-          ["installments", "Parceladas"],
+          ["all", "Resumo"],
+          ["expenses", "Saidas"],
+          ["income", "Entradas"],
+          ["pending", "Contas"],
+          ["goals", "Metas"],
         ].map(([value, label]) => (
           <button key={value} type="button" className={`shell-pill-button ${financeFilter === value ? "shell-pill-button-active" : ""}`} onClick={() => setFinanceFilter(value as FinanceFilter)}>
             {label}
           </button>
         ))}
-        <div className="ml-auto flex flex-wrap items-center gap-3">
-          <Search className="h-4 w-4 text-slate-400" />
-          <button type="button" className="shell-chip" onClick={() => setBankFilter((current) => cycleOption(current, bankOptions))}>
-            {bankFilter}
-          </button>
-          <button type="button" className="shell-chip" onClick={() => setCategoryFilter((current) => cycleOption(current, categoryOptions))}>
-            {categoryFilter}
-          </button>
-          <button type="button" className="shell-chip" onClick={() => setMovementFilter((current) => cycleOption(current, movementOptions))}>
-            {movementFilter}
-          </button>
-          <button type="button" className={`shell-pill-button ${projectionEnabled ? "shell-pill-button-active" : ""}`} onClick={() => setProjectionEnabled((current) => !current)}>
-            Projecao
-          </button>
-          <button type="button" className={`shell-pill-button ${lateOnly ? "shell-pill-button-active" : ""}`} onClick={() => setLateOnly((current) => !current)}>
-            Atrasadas
+        <div className="ml-auto">
+          <button type="button" className="shell-chip" onClick={() => void loadFinance()}>
+            <RefreshCcw className="h-4 w-4" />
+            atualizar
           </button>
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.35fr_0.9fr]">
-        <ShellCard>
-          <div className="grid grid-cols-7 gap-4 text-center text-sm">
-            {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"].map((day) => (
-              <span key={day} className="pb-2 text-slate-500">
-                {day}
-              </span>
-            ))}
-            {Array.from({ length: 35 }, (_unused, index) => {
-              const number = index + 1;
-              const strong = number === selectedFinanceDay;
-              const hasChip = number === 1 || number === 5;
-              return (
-                <button
-                  key={`fin-${index}`}
-                  type="button"
-                  onClick={() => {
-                    if (number <= 31) {
-                      setSelectedFinanceDay(number);
-                    }
-                  }}
-                  className={`rounded-[18px] px-2 py-5 text-slate-300 ${strong ? "bg-[#173240] text-[#54d8ff]" : "bg-white/[0.015]"}`}
-                >
-                  {number <= 31 ? number : ""}
-                  {hasChip ? <div className="mt-2 text-xs text-[#f37588]">{number === 1 ? "-R$ 666" : "+R$ 937"}</div> : null}
-                </button>
-              );
-            })}
-          </div>
+      {error ? (
+        <ShellCard eyebrow="financeiro" title="Nao consegui carregar o modulo">
+          <p className="text-sm leading-7 text-slate-300">{error}</p>
+        </ShellCard>
+      ) : null}
+
+      <div className="grid gap-5 xl:grid-cols-[1.25fr_0.9fr]">
+        <ShellCard title={`Fluxo mensal ${summary?.month_label ?? ""}`} right={<span className="text-sm text-slate-400">{selectedPoint?.label ?? "sem dados"}</span>}>
+          {loading ? (
+            <div className="h-40 animate-pulse rounded-[24px] bg-white/[0.04]" />
+          ) : chartPath ? (
+            <div>
+              <svg viewBox="0 0 720 180" className="h-44 w-full">
+                <path d={chartPath} fill="none" stroke="rgba(84,216,255,0.92)" strokeWidth="3" strokeLinecap="round" />
+                {(chart?.points ?? []).map((point, index, points) => {
+                  const balances = points.map((item) => item.balance);
+                  const min = Math.min(...balances);
+                  const max = Math.max(...balances);
+                  const x = points.length === 1 ? 20 : 20 + (index / (points.length - 1)) * (720 - 40);
+                  const ratio = max === min ? 0.5 : (point.balance - min) / (max - min);
+                  const y = 180 - 20 - ratio * (180 - 40);
+                  const selected = point.date === selectedPoint?.date;
+                  return (
+                    <circle
+                      key={point.date}
+                      cx={x}
+                      cy={y}
+                      r={selected ? 5 : 3}
+                      fill={selected ? "rgba(240,187,80,0.95)" : "rgba(84,216,255,0.72)"}
+                      className="cursor-pointer transition"
+                      onClick={() => setSelectedFinanceDate(point.date)}
+                    />
+                  );
+                })}
+              </svg>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <div className="rounded-[20px] border border-white/6 bg-white/[0.02] p-4">
+                  <p className="shell-eyebrow">saldo no ponto</p>
+                  <p className="mt-3 text-lg font-semibold text-white">{formatCurrency(selectedPoint?.balance ?? 0)}</p>
+                </div>
+                <div className="rounded-[20px] border border-white/6 bg-white/[0.02] p-4">
+                  <p className="shell-eyebrow">entradas do dia</p>
+                  <p className="mt-3 text-lg font-semibold text-[#2fe1b1]">{formatCurrency(selectedPoint?.income ?? 0)}</p>
+                </div>
+                <div className="rounded-[20px] border border-white/6 bg-white/[0.02] p-4">
+                  <p className="shell-eyebrow">saidas do dia</p>
+                  <p className="mt-3 text-lg font-semibold text-[#f37588]">{formatCurrency(selectedPoint?.expense ?? 0)}</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <EmptyState
+              eyebrow="financeiro"
+              title="Nenhuma movimentacao ainda"
+              description="Assim que voce registrar gastos, entradas ou contas, o fluxo mensal aparecera aqui."
+            />
+          )}
         </ShellCard>
 
-        <ShellCard title={lateOnly ? "Atrasadas" : "Todas"} right={<span className="text-sm text-slate-400">{filteredFinance.length}</span>}>
-          <div className="space-y-5">
-            {filteredFinance.map((row) => (
-              <div key={`${row.title}-${row.date}`} className="rounded-[20px] border border-white/6 bg-white/[0.02] px-4 py-4">
+        <ShellCard title="Contas e alertas" right={<span className="text-sm text-slate-400">{pendingBills.length} pendentes</span>}>
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+              <div className="rounded-[20px] border border-white/6 bg-white/[0.02] p-4">
+                <p className="shell-eyebrow">contas proximas</p>
+                <p className="mt-3 text-2xl font-semibold text-[#f0bb50]">{summary?.upcoming_bills_count ?? 0}</p>
+                <p className="mt-2 text-sm text-slate-400">{formatCurrency(summary?.upcoming_bills_amount ?? 0)}</p>
+              </div>
+              <div className="rounded-[20px] border border-white/6 bg-white/[0.02] p-4">
+                <p className="shell-eyebrow">atrasadas</p>
+                <p className="mt-3 text-2xl font-semibold text-[#f37588]">{summary?.overdue_bills_count ?? 0}</p>
+                <p className="mt-2 text-sm text-slate-400">{formatCurrency(summary?.overdue_bills_amount ?? 0)}</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {highlightedBills.length ? highlightedBills.map((bill) => (
+                <div key={bill.id} className="rounded-[18px] border border-white/6 bg-white/[0.02] px-4 py-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{bill.title}</p>
+                      <p className="mt-2 text-xs text-slate-500">{bill.category} · {bill.account}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-sm font-semibold ${bill.paid ? "text-[#2fe1b1]" : "text-[#f0bb50]"}`}>{formatCurrency(bill.amount)}</p>
+                      <p className="mt-2 text-xs text-slate-500">{formatShortDate(bill.due_date)}</p>
+                    </div>
+                  </div>
+                </div>
+              )) : (
+                <EmptyState
+                  eyebrow="contas"
+                  title="Nenhuma conta pendente"
+                  description="As proximas contas e alertas vao aparecer aqui quando voce registrar vencimentos."
+                />
+              )}
+            </div>
+          </div>
+        </ShellCard>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.25fr_0.9fr]">
+        <ShellCard title="Transacoes recentes" right={<span className="text-sm text-slate-400">{filteredTransactions.length}</span>}>
+          <div className="space-y-3">
+            {filteredTransactions.length ? filteredTransactions.slice(0, 12).map((item) => (
+              <div key={item.id} className="rounded-[18px] border border-white/6 bg-white/[0.02] px-4 py-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-lg text-slate-100">{row.title}</p>
-                    <p className="mt-2 text-sm text-slate-500">{row.category}</p>
+                    <p className="text-sm font-semibold text-white">{item.title}</p>
+                    <p className="mt-2 text-xs text-slate-500">{item.category} · {item.account}</p>
                   </div>
                   <div className="text-right">
-                    <p className={`text-lg font-semibold ${row.tone === "income" ? "text-[#2fe1b1]" : "text-[#f37588]"}`}>{row.value}</p>
-                    <p className="mt-2 text-sm text-slate-500">{row.date}</p>
+                    <p className={`text-sm font-semibold ${item.type === "income" ? "text-[#2fe1b1]" : "text-[#f37588]"}`}>
+                      {item.type === "income" ? "+" : "-"}{formatCurrency(item.amount)}
+                    </p>
+                    <p className="mt-2 text-xs text-slate-500">{formatShortDate(item.date)}</p>
                   </div>
                 </div>
               </div>
-            ))}
+            )) : (
+              <EmptyState
+                eyebrow="transacoes"
+                title="Sem movimentacoes registradas"
+                description="Use o chat ou voz para dizer algo como: gastei 35 reais com lanche."
+              />
+            )}
           </div>
         </ShellCard>
+
+        <div className="grid gap-5">
+          <ShellCard title="Gastos por categoria">
+            <div className="space-y-4">
+              {categories?.categories?.length ? categories.categories.slice(0, 5).map((item) => {
+                const topAmount = categories.categories[0]?.amount || 1;
+                const width = `${Math.max(10, (item.amount / topAmount) * 100)}%`;
+                return (
+                  <div key={item.category}>
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                      <span className="text-slate-200">{item.category}</span>
+                      <span className="text-slate-400">{formatCurrency(item.amount)}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-white/[0.05]">
+                      <div className="h-2 rounded-full bg-[linear-gradient(90deg,rgba(84,216,255,0.85),rgba(139,92,246,0.72))]" style={{ width }} />
+                    </div>
+                  </div>
+                );
+              }) : (
+                <EmptyState
+                  eyebrow="categorias"
+                  title="Sem categorias com gasto"
+                  description="Quando houver despesas no mes, o Nexus agrupa tudo aqui por categoria."
+                />
+              )}
+            </div>
+          </ShellCard>
+
+          <ShellCard title="Metas financeiras" right={<span className="text-sm text-slate-400">{goals.length}</span>}>
+            <div className="space-y-4">
+              {highlightedGoals.length ? highlightedGoals.map((goal) => (
+                <div key={goal.id} className="rounded-[18px] border border-white/6 bg-white/[0.02] px-4 py-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{goal.title}</p>
+                      <p className="mt-2 text-xs text-slate-500">prazo {formatShortDate(goal.deadline)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-[#54d8ff]">{progressPercent(goal.progress_ratio)}</p>
+                      <p className="mt-2 text-xs text-slate-500">{formatCurrency(goal.remaining_amount)} restantes</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 h-2 rounded-full bg-white/[0.05]">
+                    <div className="h-2 rounded-full bg-[linear-gradient(90deg,rgba(84,216,255,0.9),rgba(47,225,177,0.82))]" style={{ width: progressPercent(goal.progress_ratio) }} />
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                    <span>{formatCurrency(goal.current_amount)}</span>
+                    <span>{formatCurrency(goal.target_amount)}</span>
+                  </div>
+                </div>
+              )) : (
+                <EmptyState
+                  eyebrow="metas"
+                  title="Nenhuma meta criada"
+                  description="Experimente: cria meta de guardar 500 reais esse mes."
+                />
+              )}
+            </div>
+          </ShellCard>
+        </div>
       </div>
     </section>
   );
@@ -3058,6 +4533,7 @@ function VisionView({
 function MindView({
   state,
   isSaving,
+  autonomyUnlocked,
   onSaveSettings,
   onStart,
   onStop,
@@ -3068,6 +4544,7 @@ function MindView({
 }: {
   state: MindState | null;
   isSaving: boolean;
+  autonomyUnlocked: boolean;
   onSaveSettings: (settings: Record<string, unknown>) => void;
   onStart: () => void;
   onStop: () => void;
@@ -3122,12 +4599,27 @@ function MindView({
             <div>
               <p className="shell-eyebrow">modo</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                {["supervisionado", "autônomo", "agressivo"].map((item) => (
-                  <button key={item} type="button" className={`shell-chip ${mode === item ? "shell-chip-active" : ""}`} onClick={() => setMode(item)}>
-                    {item}
+                {[
+                  { value: "supervisionado", locked: false },
+                  { value: "autônomo", locked: !autonomyUnlocked },
+                  { value: "agressivo", locked: !autonomyUnlocked },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    disabled={item.locked}
+                    className={`shell-chip ${mode === item.value ? "shell-chip-active" : ""} ${item.locked ? "cursor-not-allowed opacity-45" : ""}`}
+                    onClick={() => setMode(item.value)}
+                  >
+                    {item.locked ? `${item.value} (bloqueado)` : item.value}
                   </button>
                 ))}
               </div>
+              {!autonomyUnlocked ? (
+                <p className="mt-3 text-sm text-slate-400">
+                  Modos autônomo e agressivo só liberam quando a permissão <span className="text-white">Autonomous mind</span> estiver ativa nas configurações.
+                </p>
+              ) : null}
             </div>
             <div>
               <p className="shell-eyebrow">diretriz</p>
@@ -3270,42 +4762,50 @@ function TelemetryView({
     }
     return logs.filter((line) => line.toLowerCase().includes(needle));
   }, [logFilter, logs]);
+  const onlineModules = (dashboard?.modules ?? []).filter((module) => ["online", "ready", "guarded"].includes(module.status)).length;
+  const lastErrorEvent = [...events].reverse().find((event) => eventTone(event.kind, event.message) === "danger") ?? null;
+  const timelineItems = events.slice(0, 12);
 
   return (
     <section className="space-y-6 px-4 py-8 lg:px-12">
-      <div className="grid gap-4 md:grid-cols-4">
-        <ShellCard eyebrow="runtime" title="Saude atual">
-          <p className="text-5xl font-semibold text-[#54d8ff]">{dashboard?.health.score ?? "--"}</p>
-          <p className="mt-2 text-sm text-slate-400">{dashboard?.health.status ?? "carregando"}</p>
-        </ShellCard>
-        <ShellCard eyebrow="fluxo" title="Eventos vivos">
-          <p className="text-5xl font-semibold text-[#f0bb50]">{events.length}</p>
-          <p className="mt-2 text-sm text-slate-400">ultimos eventos capturados pela shell</p>
-        </ShellCard>
-        <ShellCard eyebrow="observacoes" title="Avisos do projeto" right={<button type="button" className="shell-chip" onClick={onOpenUpdates}>novidades</button>}>
-          <p className="text-sm leading-7 text-slate-300">{dashboard?.health.warnings[0] ?? "sem avisos fortes no momento"}</p>
-        </ShellCard>
-        <ShellCard eyebrow="servidor local" title="Monitor">
-          <p className="text-sm leading-7 text-slate-300">CPU {runtimeStatus?.cpu ?? 0}% · RAM {runtimeStatus?.ram ?? 0}% · DISCO {runtimeStatus?.disk ?? 0}%</p>
-          <button type="button" className="mt-4 shell-chip" onClick={onRefresh}>
-            atualizar agora
-          </button>
-        </ShellCard>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <MetricCard label="Saude" value={`${dashboard?.health.score ?? "--"}%`} detail={dashboard?.health.status ?? "carregando"} tone="sky" />
+        <MetricCard label="Comandos hoje" value={String(events.length)} detail="atividade recente capturada pela shell" tone="amber" />
+        <MetricCard label="Modulos online" value={`${onlineModules}/${dashboard?.modules.length ?? 0}`} detail="base operacional disponivel agora" tone="online" />
+        <MetricCard label="Ultimo erro" value={lastErrorEvent ? formatClockLabel(lastErrorEvent.timestamp) : "--:--"} detail={lastErrorEvent ? "erro monitorado na timeline" : "nenhuma falha forte agora"} tone={lastErrorEvent ? "danger" : "online"} />
+        <MetricCard label="Servidor local" value={`${runtimeStatus?.cpu ?? 0}%`} detail={`CPU agora · RAM ${runtimeStatus?.ram ?? 0}% · DISCO ${runtimeStatus?.disk ?? 0}%`} tone={(runtimeStatus?.cpu ?? 0) >= 75 ? "warning" : "sky"} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
-        <ShellCard eyebrow="timeline" title="Eventos recentes">
-          <div className="space-y-3">
-            {events.slice(0, 10).map((event) => (
-              <div key={`${event.timestamp}-${event.message}`} className="rounded-[22px] border border-white/6 bg-white/[0.02] px-4 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className={`text-xs uppercase tracking-[0.24em] ${toneClass(event.kind)}`}>{event.kind}</span>
-                  <span className="text-xs text-slate-500">{event.timestamp.slice(11, 19)}</span>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-200">{event.message}</p>
-              </div>
-            ))}
-          </div>
+        <ShellCard eyebrow="timeline" title="Timeline de atividade" right={<button type="button" className="shell-chip" onClick={onOpenUpdates}>novidades</button>}>
+          <p className="-mt-1 mb-4 text-sm leading-7 text-slate-400">{formatRuntimeStamp(runtimeStatus?.updated_at)}</p>
+          {timelineItems.length ? (
+            <div className="shell-timeline">
+              {timelineItems.map((event, index) => {
+                const tone = eventTone(event.kind, event.message);
+                return (
+                  <div key={`${event.timestamp}-${event.message}-${index}`} className="shell-timeline-item">
+                    <div className={`shell-timeline-dot ${toneClass(tone)}`} />
+                    <div className="shell-timeline-content">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span className={`text-xs uppercase tracking-[0.24em] ${toneClass(tone)}`}>{eventLabel(event.kind)}</span>
+                        <span className="text-xs text-slate-500">{formatClockLabel(event.timestamp)}</span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-200">{event.message}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              eyebrow="timeline"
+              title="Nenhum evento ainda"
+              description="Quando voce executar comandos, aprovar acoes ou abrir modulos, a atividade do Nexus vai aparecer aqui em ordem cronologica."
+              actionLabel="Atualizar atividade"
+              onAction={onRefresh}
+            />
+          )}
         </ShellCard>
 
         <ShellCard
@@ -3339,13 +4839,23 @@ function TelemetryView({
             placeholder="filtrar logs..."
             className="mb-4 w-full rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500"
           />
-          <div className="rounded-[24px] border border-white/6 bg-[#080e18] p-4 font-mono text-xs leading-6 text-slate-300">
-            {filteredLogs.slice(0, 40).map((line, index) => (
-              <p key={`${index}-${line}`} className="border-b border-white/4 py-1 last:border-b-0">
-                {line}
-              </p>
-            ))}
-          </div>
+          {filteredLogs.length ? (
+            <div className="rounded-[24px] border border-white/6 bg-[#080e18] p-4 font-mono text-xs leading-6 text-slate-300">
+              {filteredLogs.slice(0, 40).map((line, index) => (
+                <p key={`${index}-${line}`} className="border-b border-white/4 py-1 last:border-b-0">
+                  {line}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              eyebrow="logs"
+              title="Nenhuma linha encontrada"
+              description={logFilter ? "Ajuste o filtro para ver mais eventos do Nexus." : "Os logs vao aparecer aqui assim que o sistema executar novas rotinas."}
+              actionLabel="Atualizar logs"
+              onAction={onRefresh}
+            />
+          )}
         </ShellCard>
       </div>
     </section>
@@ -3552,6 +5062,7 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([bootMessage]);
   const [command, setCommand] = useState("");
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
+  const [isBooting, setIsBooting] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isConversationActive, setIsConversationActive] = useState(false);
@@ -3561,6 +5072,9 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ViewId>("chat");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("profile");
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
+  const [commandPaletteIndex, setCommandPaletteIndex] = useState(0);
   const [profileContrast, setProfileContrast] = useState<ProfileContrast>("normal");
   const [fontScale, setFontScale] = useState<FontScale>("normal");
   const [isRefreshing, startTransition] = useTransition();
@@ -3578,6 +5092,28 @@ export default function App() {
     () => [...messages].reverse().find((message) => message.role === "assistant" && sanitizeChatText(message.content)) ?? null,
     [messages],
   );
+  const ownerName = typeof settings.owner_name === "string" && settings.owner_name.trim() ? settings.owner_name.trim() : "Nicolas";
+  const preferredInputDeviceId = normalizePreferredDeviceId(settings.browser_voice_input_device);
+  const naturalConversation = useConversationMode({
+    preferredInputDeviceId,
+    voiceProvider: String(settings.professional_voice_provider ?? "auto"),
+    voiceProfile: String(settings.professional_voice_profile ?? "jarvis"),
+  });
+  const conversationMode: ConversationModeController = {
+    ...naturalConversation,
+    startConversation: async () => {
+      if (recognitionRef.current || isConversationActive || isDictating || isSpeaking) {
+        stopVoiceCapture();
+      }
+      await naturalConversation.startConversation();
+    },
+    resumeConversation: async () => {
+      if (recognitionRef.current || isConversationActive || isDictating || isSpeaking) {
+        stopVoiceCapture();
+      }
+      await naturalConversation.resumeConversation();
+    },
+  };
 
   useEffect(() => {
     const storedContrast = window.localStorage.getItem("nexus-profile-contrast");
@@ -3596,6 +5132,55 @@ export default function App() {
   }, [profileContrast, fontScale]);
 
   useEffect(() => {
+    const handlePaletteShortcut = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTypingTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        Boolean(target?.closest("[contenteditable='true']"));
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setIsCommandPaletteOpen((current) => {
+          const nextOpen = !current;
+          if (nextOpen) {
+            setCommandPaletteQuery("");
+            setCommandPaletteIndex(0);
+          }
+          return nextOpen;
+        });
+        return;
+      }
+
+      if (event.key === "Escape" && isCommandPaletteOpen) {
+        event.preventDefault();
+        setIsCommandPaletteOpen(false);
+        return;
+      }
+
+      if (isTypingTarget || isCommandPaletteOpen) {
+        return;
+      }
+
+      if (event.key === "/") {
+        event.preventDefault();
+        setActiveView("chat");
+        document.getElementById("nexus-chat-dock")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    };
+
+    window.addEventListener("keydown", handlePaletteShortcut);
+    return () => window.removeEventListener("keydown", handlePaletteShortcut);
+  }, [isCommandPaletteOpen]);
+
+  useEffect(() => {
+    if (!isCommandPaletteOpen) {
+      return;
+    }
+    setCommandPaletteIndex(0);
+  }, [commandPaletteQuery, isCommandPaletteOpen]);
+
+  useEffect(() => {
     pendingConfirmationRef.current = pendingConfirmation;
   }, [pendingConfirmation]);
 
@@ -3606,6 +5191,15 @@ export default function App() {
   useEffect(() => {
     isSpeakingRef.current = isSpeaking;
   }, [isSpeaking]);
+
+  useEffect(() => {
+    if (!naturalConversation.active) {
+      return;
+    }
+    if (recognitionRef.current || isConversationActive || isDictating || isSpeaking) {
+      stopVoiceCapture();
+    }
+  }, [isConversationActive, isDictating, isSpeaking, naturalConversation.active]);
 
   useEffect(() => {
     return () => {
@@ -3674,7 +5268,7 @@ export default function App() {
       if (!conversationEnabledRef.current || recognitionRef.current || isSendingRef.current || isSpeakingRef.current) {
         return;
       }
-      beginVoiceCapture("conversation");
+      void beginVoiceCapture("conversation");
     }, delay);
   }
 
@@ -3759,7 +5353,17 @@ export default function App() {
     return true;
   }
 
-  function beginVoiceCapture(mode: VoiceMode) {
+  async function beginVoiceCapture(mode: VoiceMode) {
+    const probe = await verifyMicrophoneAccess(preferredInputDeviceId);
+    if (!probe.ok) {
+      pushSystemMessage(probe.message, "voice/error");
+      if (mode === "conversation") {
+        conversationEnabledRef.current = false;
+        setIsConversationActive(false);
+      }
+      return;
+    }
+
     if (!speechRecognitionCtor) {
       pushSystemMessage("Seu navegador não liberou reconhecimento de voz nesta interface.");
       if (mode === "conversation") {
@@ -3865,7 +5469,7 @@ export default function App() {
     }
     conversationEnabledRef.current = true;
     setIsConversationActive(true);
-    beginVoiceCapture("conversation");
+    void beginVoiceCapture("conversation");
   }
 
   function triggerVoiceCommand() {
@@ -3876,7 +5480,7 @@ export default function App() {
     if (conversationEnabledRef.current) {
       stopVoiceCapture();
     }
-    beginVoiceCapture("dictation");
+    void beginVoiceCapture("dictation");
   }
 
   function handleAttachFiles(fileList: FileList | null) {
@@ -3904,6 +5508,7 @@ export default function App() {
 
   async function refreshDashboard() {
     const [payload, memoryPayload, runtimePayload, nextMindState] = await Promise.all([fetchDashboard(), fetchMemoryGraph(), fetchRuntimeStatus(), fetchMindState()]);
+    setApiToken(String(payload.settings?.local_api_token ?? ""));
     startTransition(() => {
       setDashboard(payload);
       setMemoryGraph(memoryPayload);
@@ -3948,6 +5553,7 @@ export default function App() {
         if (!active) {
           return;
         }
+        setApiToken(String(settingsPayload.local_api_token ?? ""));
         startTransition(() => {
           setDashboard(dashboardPayload);
           setMemoryGraph(memoryPayload);
@@ -3968,6 +5574,15 @@ export default function App() {
           return;
         }
         setErrorMessage(error instanceof Error ? error.message : "Sincronização instável. Verifique a conexão.");
+      } finally {
+        if (!active) {
+          return;
+        }
+        window.setTimeout(() => {
+          if (active) {
+            setIsBooting(false);
+          }
+        }, 260);
       }
     }
 
@@ -4132,10 +5747,27 @@ export default function App() {
     await executeCommand(nextCommand, true, false);
   }
 
+  function handleCancelPending() {
+    if (!pendingConfirmation) {
+      return;
+    }
+    setPendingConfirmation(null);
+    setMessages((current) => [
+      ...current,
+      {
+        id: asMessageId(),
+        role: "system",
+        content: "Acao cancelada antes da execucao.",
+        meta: "confirmation/cancelled",
+      },
+    ]);
+  }
+
   async function handleSaveSettings(nextSettings: Record<string, unknown>) {
     setIsSaving(true);
     try {
       const saved = await saveSettings(nextSettings);
+      setApiToken(String(saved.local_api_token ?? ""));
       setSettings(saved);
       setMessages((current) => [
         ...current,
@@ -4214,11 +5846,223 @@ export default function App() {
     }
   }
 
+  function openCommandPalette() {
+    setCommandPaletteQuery("");
+    setCommandPaletteIndex(0);
+    setIsCommandPaletteOpen(true);
+  }
+
+  function closeCommandPalette() {
+    setIsCommandPaletteOpen(false);
+  }
+
+  async function handleRefreshWorkspace() {
+    try {
+      await Promise.all([refreshDashboard(), refreshVisionStatus()]);
+      setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao atualizar o cockpit do Nexus.");
+    }
+  }
+
+  function openChatAndRun(nextCommand: string) {
+    setActiveView("chat");
+    setCommand(nextCommand);
+    void executeCommand(nextCommand);
+  }
+
+  const commandPaletteActions: PaletteAction[] = [
+      {
+        id: "nav-chat",
+        label: "Abrir Command Center",
+        description: "Volta para a home principal com orb, chat e estado geral.",
+        keywords: ["home chat central cockpit command center"],
+        icon: MessageCircle,
+        hint: "navegacao",
+        run: () => setActiveView("chat"),
+      },
+      {
+        id: "nav-conversation",
+        label: "Abrir Modo Jarvis",
+        description: "Abre a conversa natural com voz continua, contexto e modo estudo.",
+        keywords: ["conversa jarvis estudo voz natural tutor"],
+        icon: Headphones,
+        hint: "navegacao",
+        run: () => setActiveView("conversation"),
+      },
+      {
+        id: "nav-panel",
+        label: "Abrir painel de modulos",
+        description: "Mostra status, permissoes e configuracao rapida dos modulos.",
+        keywords: ["painel modulos status coder projetos"],
+        icon: FolderKanban,
+        hint: "navegacao",
+        run: () => setActiveView("tasks"),
+      },
+      {
+        id: "nav-flow",
+        label: "Abrir Nexus Flow",
+        description: "Canvas visual para planos, etapas e automacoes do Nexus.",
+        keywords: ["flow canvas automacao visual etapas react flow"],
+        icon: GitBranch,
+        hint: "navegacao",
+        run: () => setActiveView("flow"),
+      },
+      {
+        id: "nav-automation",
+        label: "Abrir automacao",
+        description: "Fluxos protegidos para comandos do PC e atalhos.",
+        keywords: ["automacao pc apps sistema workflows"],
+        icon: SlidersHorizontal,
+        hint: "navegacao",
+        run: () => setActiveView("automation"),
+      },
+      {
+        id: "nav-vision",
+        label: "Abrir vision",
+        description: "Captura de tela, camera e perguntas visuais.",
+        keywords: ["vision visao camera tela screenshot"],
+        icon: Eye,
+        hint: "navegacao",
+        run: () => setActiveView("vision"),
+      },
+      {
+        id: "nav-memory",
+        label: "Abrir memoria",
+        description: "Grafo, notas e contexto persistente do Nexus.",
+        keywords: ["memoria brain notas obsidian grafo"],
+        icon: Brain,
+        hint: "navegacao",
+        run: () => setActiveView("brain"),
+      },
+      {
+        id: "nav-mind",
+        label: "Abrir NexusMind",
+        description: "Auto-melhoria supervisionada com ciclos e rollback.",
+        keywords: ["mind nexusmind melhoria codigo"],
+        icon: Sparkles,
+        hint: "navegacao",
+        run: () => setActiveView("mind"),
+      },
+      {
+        id: "nav-logs",
+        label: "Abrir auditoria",
+        description: "Eventos recentes, atividade e telemetria do sistema.",
+        keywords: ["logs atividade auditoria eventos telemetry"],
+        icon: Activity,
+        hint: "navegacao",
+        run: () => setActiveView("telemetry"),
+      },
+      {
+        id: "nav-settings",
+        label: "Abrir configuracoes",
+        description: "Perfil, integracoes, seguranca e sistema.",
+        keywords: ["settings configuracoes token voz tema"],
+        icon: Settings,
+        hint: "navegacao",
+        run: () => {
+          setActiveView("settings");
+          setSettingsTab("profile");
+        },
+      },
+      {
+        id: "cmd-diagnostico",
+        label: "Rodar diagnostico do projeto",
+        description: "Executa o fluxo de diagnostico pelo chat do Nexus.",
+        keywords: ["diagnostico projeto doctor health check tests"],
+        icon: Activity,
+        hint: "comando",
+        run: () => openChatAndRun("diagnostico do projeto"),
+      },
+      {
+        id: "cmd-foco",
+        label: "Ativar modo foco",
+        description: "Inicia um fluxo rapido de foco e organizacao.",
+        keywords: ["modo foco produtividade estudar"],
+        icon: Brain,
+        hint: "comando",
+        run: () => openChatAndRun("ativar modo foco"),
+      },
+      {
+        id: "cmd-tela",
+        label: "Analisar tela",
+        description: "Pede ao Nexus uma leitura imediata da tela atual.",
+        keywords: ["analisar tela descrever screen vision"],
+        icon: MonitorUp,
+        hint: "comando",
+        run: () => openChatAndRun("descreve a tela"),
+      },
+      {
+        id: "cmd-jarvis",
+        label: "Ativar Modo Jarvis",
+        description: "Abre a conversa natural e comeca a ouvir voce.",
+        keywords: ["jarvis conversa natural ouvir microfone estudo"],
+        icon: Mic,
+        hint: "comando",
+        run: () => {
+          setActiveView("conversation");
+          void conversationMode.startConversation();
+        },
+      },
+      {
+        id: "cmd-musica",
+        label: "Tocar Luan Santana",
+        description: "Aciona um atalho rapido de musica no chat.",
+        keywords: ["spotify musica luan santana ouvir"],
+        icon: Headphones,
+        hint: "comando",
+        run: () => openChatAndRun("quero ouvir luan santana"),
+      },
+      {
+        id: "cmd-casa",
+        label: "Ver status da casa",
+        description: "Consulta o dominio residencial e dispositivos ativos.",
+        keywords: ["casa home status dispositivos"],
+        icon: Link2,
+        hint: "comando",
+        run: () => openChatAndRun("status da casa"),
+      },
+    ];
+
+  const filteredPaletteActions = useMemo(() => {
+    const normalizedQuery = normalizeVoiceText(commandPaletteQuery).trim();
+    if (!normalizedQuery) {
+      return commandPaletteActions;
+    }
+    const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
+    return commandPaletteActions.filter((action) => {
+      const haystack = normalizeVoiceText([action.label, action.description, ...action.keywords].join(" "));
+      return queryTokens.every((token: string) => haystack.includes(token));
+    });
+  }, [commandPaletteActions, commandPaletteQuery]);
+
+  function handleSelectPaletteAction(action: PaletteAction) {
+    closeCommandPalette();
+    action.run();
+  }
+
+  if (isBooting) {
+    return <BootScreen ownerName={ownerName} />;
+  }
+
   return (
     <div className="shell-root" style={shellStyle}>
+      <CommandPalette
+        open={isCommandPaletteOpen}
+        query={commandPaletteQuery}
+        actions={filteredPaletteActions}
+        activeIndex={Math.min(commandPaletteIndex, Math.max(filteredPaletteActions.length - 1, 0))}
+        onQueryChange={setCommandPaletteQuery}
+        onActiveIndexChange={setCommandPaletteIndex}
+        onSelect={handleSelectPaletteAction}
+        onClose={closeCommandPalette}
+      />
+
       <Sidebar
         activeView={activeView}
+        dashboard={dashboard}
         onSelect={setActiveView}
+        onOpenPalette={openCommandPalette}
         onHelp={() => {
           setActiveView("settings");
           setSettingsTab("updates");
@@ -4226,22 +6070,41 @@ export default function App() {
       />
 
       <main className="shell-main">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(50,180,216,0.14),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(55,68,180,0.14),transparent_28%)]" />
-        {errorMessage ? (
-          <div className="relative z-20 mx-4 mt-4 rounded-full border border-[#6d3244] bg-[#2a151c]/80 px-5 py-3 text-sm text-[#f3a5b3] lg:mx-12">
-            {errorMessage}
-          </div>
-        ) : null}
+        <Topbar
+          activeView={activeView}
+          ownerName={ownerName}
+          dashboard={dashboard}
+          runtimeStatus={runtimeStatus}
+          pendingConfirmation={pendingConfirmation}
+          isConversationActive={isConversationActive || conversationMode.active}
+          isRefreshing={isRefreshing}
+          onRefresh={() => {
+            void handleRefreshWorkspace();
+          }}
+          onOpenPalette={openCommandPalette}
+          onOpenSettings={() => {
+            setActiveView("settings");
+            setSettingsTab("profile");
+          }}
+        />
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={`${activeView}-${settingsTab}`}
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.24 }}
-            className="relative z-10"
-          >
+        <div className="shell-viewport">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(50,180,216,0.14),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(55,68,180,0.14),transparent_28%)]" />
+          {errorMessage ? (
+            <div className="relative z-20 mx-4 mt-4 rounded-full border border-[#6d3244] bg-[#2a151c]/80 px-5 py-3 text-sm text-[#f3a5b3] lg:mx-12">
+              {errorMessage}
+            </div>
+          ) : null}
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${activeView}-${settingsTab}`}
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.24 }}
+              className="relative z-10"
+            >
             {activeView === "chat" ? (
               <ChatLanding
                 dashboard={dashboard}
@@ -4250,17 +6113,27 @@ export default function App() {
                 attachments={attachments}
                 isSending={isSending}
                 isConversationActive={isConversationActive}
+                naturalConversationActive={conversationMode.active}
+                naturalConversationState={conversationMode.state}
+                naturalConversationSpeakingLevel={conversationMode.speakingLevel}
                 isDictating={isDictating}
-                isSpeaking={isSpeaking}
+                isSpeaking={isSpeaking || conversationMode.isSpeaking}
                 voiceSupported={Boolean(speechRecognitionCtor)}
                 pendingConfirmation={pendingConfirmation}
                 quickActionItems={quickActions}
                 onChange={setCommand}
                 onAttachFiles={handleAttachFiles}
                 onToggleConversation={() => {
+                  if (conversationMode.active) {
+                    conversationMode.stopConversation();
+                    return;
+                  }
                   toggleConversationMode();
                 }}
                 onTranscribe={() => {
+                  if (conversationMode.active) {
+                    conversationMode.stopConversation();
+                  }
                   triggerVoiceCommand();
                 }}
                 onSpeakLastResponse={() => {
@@ -4271,12 +6144,16 @@ export default function App() {
                   setCommand(value);
                   void executeCommand(value);
                 }}
+                onOpenConversation={() => {
+                  setActiveView("conversation");
+                }}
                 onSend={() => {
                   void handleSend();
                 }}
                 onConfirmPending={() => {
                   void handleConfirmPending();
                 }}
+                onCancelPending={handleCancelPending}
                 onBriefing={() => {
                   setActiveView("telemetry");
                 }}
@@ -4287,8 +6164,23 @@ export default function App() {
                 onOpenFinance={() => {
                   setActiveView("finance");
                 }}
+                onOpenAutomation={() => {
+                  setActiveView("automation");
+                }}
+                onOpenProgramming={() => {
+                  setActiveView("tasks");
+                }}
+                onOpenVision={() => {
+                  setActiveView("vision");
+                }}
+                onOpenMind={() => {
+                  setActiveView("mind");
+                }}
+                ownerName={ownerName}
               />
             ) : null}
+
+            {activeView === "conversation" ? <ConversationModePanel conversation={conversationMode} ownerName={ownerName} /> : null}
 
             {activeView === "automation" ? (
               <AutomationView
@@ -4303,6 +6195,19 @@ export default function App() {
                   setActiveView("chat");
                   setCommand(value);
                   void executeCommand(value);
+                }}
+              />
+            ) : null}
+
+            {activeView === "flow" ? (
+              <NexusFlow
+                ownerName={ownerName}
+                runtimeStatus={runtimeStatus}
+                healthScore={dashboard?.health.score ?? 0}
+                onOpenChatWithCommand={(prompt) => {
+                  setActiveView("chat");
+                  setCommand(prompt);
+                  void executeCommand(prompt);
                 }}
               />
             ) : null}
@@ -4338,6 +6243,7 @@ export default function App() {
               <MindView
                 state={mindState}
                 isSaving={isSavingMind}
+                autonomyUnlocked={Boolean(settings.mind_allow_autonomous)}
                 onSaveSettings={(nextSettings) => {
                   void handleSaveMindSettings(nextSettings);
                 }}
@@ -4361,7 +6267,36 @@ export default function App() {
                 }}
               />
             ) : null}
-            {activeView === "tasks" ? <TasksView modules={dashboard?.modules ?? []} /> : null}
+            {activeView === "tasks" ? (
+              <ModulePanelView
+                modules={dashboard?.modules ?? []}
+                onOpenModule={(moduleId) => {
+                  if (moduleId === "mind") {
+                    setActiveView("mind");
+                    return;
+                  }
+                  if (moduleId === "vision") {
+                    setActiveView("vision");
+                    return;
+                  }
+                  if (moduleId === "automation") {
+                    setActiveView("automation");
+                    return;
+                  }
+                  if (moduleId === "memory" || moduleId === "integrations") {
+                    setActiveView("settings");
+                    setSettingsTab("integrations");
+                    return;
+                  }
+                  if (moduleId === "api" || moduleId === "voice") {
+                    setActiveView("settings");
+                    setSettingsTab("system");
+                    return;
+                  }
+                  setActiveView("chat");
+                }}
+              />
+            ) : null}
             {activeView === "reminders" ? <RemindersView onQuickReminder={() => void executeCommand("me lembre de revisar minhas anotacoes de viagem hoje as 14:00")} /> : null}
             {activeView === "finance" ? <FinanceView /> : null}
             {activeView === "telemetry" ? (
@@ -4404,7 +6339,19 @@ export default function App() {
             ) : null}
           </motion.div>
         </AnimatePresence>
+        </div>
       </main>
+
+      <button
+        type="button"
+        className="shell-command-fab"
+        onClick={openCommandPalette}
+        aria-label="Abrir command palette"
+        title="Abrir command palette"
+      >
+        <Search className="h-4 w-4" />
+        <span>⌘</span>
+      </button>
 
       <div className="fixed bottom-6 right-6 z-30 flex items-center gap-2 rounded-full border border-white/10 bg-[#0c1422]/80 px-4 py-2 text-xs uppercase tracking-[0.24em] text-slate-400 backdrop-blur-md md:bottom-8 md:right-8">
         {isRefreshing ? <Activity className="h-4 w-4 text-[#54d8ff]" /> : <Eye className="h-4 w-4 text-[#54d8ff]" />}
