@@ -29,10 +29,12 @@ import {
   RefreshCcw,
   ExternalLink,
   GitBranch,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
 import { NexusFlow } from "@/components/nexus-flow";
+import { DoctorView } from "@/components/doctor-view";
 import { ConversationModePanel } from "@/components/conversation-mode-panel";
 import { NexusParticleOrb } from "@/components/nexus-particle-orb";
 import { SettingsForm } from "@/components/settings-form";
@@ -138,7 +140,7 @@ type BrowserSpeechRecognitionInstance = {
 
 type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognitionInstance;
 
-type ViewId = "chat" | "conversation" | "flow" | "automation" | "brain" | "vision" | "mind" | "tasks" | "reminders" | "finance" | "telemetry" | "settings";
+type ViewId = "chat" | "conversation" | "flow" | "automation" | "brain" | "vision" | "mind" | "tasks" | "reminders" | "finance" | "telemetry" | "doctor" | "settings";
 type BrainMode = "brain" | "notes" | "tags" | "finance" | "projects" | "tasks";
 type TaskFilter = "all" | "normal" | "recurring";
 type ModuleHealthFilter = "all" | "online" | "attention" | "blocked";
@@ -333,6 +335,13 @@ const navItems: NavItem[] = [
     description: "Eventos, auditoria e telemetria do sistema.",
     section: "operations",
     icon: Activity,
+  },
+  {
+    id: "doctor",
+    label: "Doctor",
+    description: "Diagnostico, instalacao e saude do sistema.",
+    section: "system",
+    icon: ShieldCheck,
   },
   {
     id: "settings",
@@ -5954,6 +5963,15 @@ export default function App() {
         run: () => setActiveView("telemetry"),
       },
       {
+        id: "nav-doctor",
+        label: "Abrir Nexus Doctor",
+        description: "Diagnostico de instalacao, modulos, permissoes e saude do sistema.",
+        keywords: ["doctor diagnostico saude instalacao producao modulos status"],
+        icon: ShieldCheck,
+        hint: "navegacao",
+        run: () => setActiveView("doctor"),
+      },
+      {
         id: "nav-settings",
         label: "Abrir configuracoes",
         description: "Perfil, integracoes, seguranca e sistema.",
@@ -6299,6 +6317,33 @@ export default function App() {
             ) : null}
             {activeView === "reminders" ? <RemindersView onQuickReminder={() => void executeCommand("me lembre de revisar minhas anotacoes de viagem hoje as 14:00")} /> : null}
             {activeView === "finance" ? <FinanceView /> : null}
+            {activeView === "doctor" ? (
+              <DoctorView
+                dashboard={dashboard}
+                runtimeStatus={runtimeStatus}
+                settings={settings}
+                onOpenSettings={() => {
+                  setActiveView("settings");
+                  setSettingsTab("profile");
+                }}
+                onRefresh={() => {
+                  void handleRefreshWorkspace();
+                }}
+                onTestVoice={() => {
+                  setActiveView("conversation");
+                  void conversationMode.professionalVoice.testVoice();
+                }}
+                onOpenLogs={() => {
+                  setActiveView("telemetry");
+                }}
+                onOpenFinance={() => {
+                  setActiveView("finance");
+                }}
+                onOpenConversation={() => {
+                  setActiveView("conversation");
+                }}
+              />
+            ) : null}
             {activeView === "telemetry" ? (
               <TelemetryView
                 logs={deferredLogs}
