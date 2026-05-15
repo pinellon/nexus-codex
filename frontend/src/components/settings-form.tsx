@@ -69,6 +69,30 @@ export function SettingsForm({ initialSettings, isSaving, onSave }: SettingsForm
           />
         </Field>
 
+        <Field label="listen timeout" help="Segundos de espera antes de desistir de ouvir.">
+          <input
+            type="number"
+            min={1}
+            value={String(form.voice_listen_timeout ?? 5)}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, voice_listen_timeout: Number(event.target.value || 5) }))
+            }
+            className="w-full rounded-2xl border border-white/8 bg-transparent px-4 py-3 text-sm text-white outline-none"
+          />
+        </Field>
+
+        <Field label="phrase limit" help="Limite maximo de segundos por frase capturada.">
+          <input
+            type="number"
+            min={1}
+            value={String(form.voice_phrase_time_limit ?? 10)}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, voice_phrase_time_limit: Number(event.target.value || 10) }))
+            }
+            className="w-full rounded-2xl border border-white/8 bg-transparent px-4 py-3 text-sm text-white outline-none"
+          />
+        </Field>
+
         <Field label="default media" help="Plataforma preferida para reproduzir musica.">
           <input
             value={String(form.default_media ?? "")}

@@ -62,7 +62,7 @@ def load() -> dict:
 
 
 def save(settings: dict) -> dict:
-    data = dict(_DEFAULTS)
+    data = load()
     data.update(settings or {})
     DATA_DIR.mkdir(exist_ok=True)
     SETTINGS_FILE.write_text(

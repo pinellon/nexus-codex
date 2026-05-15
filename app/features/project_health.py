@@ -36,6 +36,9 @@ IMPORTANT_PATHS = [
     "README.md",
     "requirements.txt",
     "main.py",
+    "app/web/server.py",
+    "frontend/package.json",
+    "frontend/src/App.tsx",
     "app/settings_manager.py",
     "app/core/command_router.py",
     "app/core/safety.py",
@@ -71,9 +74,13 @@ def analyze_project(root: str | Path = ".") -> HealthReport:
     requirements = root / "requirements.txt"
     if requirements.exists():
         req_text = requirements.read_text(encoding="utf-8", errors="ignore").lower()
-        for package in ["customtkinter", "speechrecognition", "psutil", "pyautogui"]:
+        for package in ["speechrecognition", "psutil", "pyautogui", "fastapi"]:
             if package not in req_text:
                 warnings.append(f"Dependencia possivelmente ausente: {package}")
+
+    desktop_file = root / "ui" / "desktop_app.py"
+    if desktop_file.exists():
+        found.append("ui/desktop_app.py (legado)")
 
     base = len(IMPORTANT_PATHS)
     score = int((len(found) / base) * 80) if base else 80

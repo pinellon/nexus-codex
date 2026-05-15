@@ -557,6 +557,17 @@ class NexusApp(ctk.CTk):
         r = row("Wake word")
         self._wake_word_var = tk.StringVar(value=cfg.get("wake_word", "nexus"))
         tk.Entry(r, textvariable=self._wake_word_var, bg=C["border"], fg=C["text"], insertbackground=C["cyan"], relief="flat", font=F["small"]).pack(side="left", fill="x", expand=True, padx=4, ipady=6)
+        r = row("Exigir wake word")
+        self._voice_require_wake_word_var = tk.BooleanVar(value=bool(cfg.get("voice_require_wake_word", True)))
+        tk.Checkbutton(r, variable=self._voice_require_wake_word_var, bg=C["card"], selectcolor=C["cyan_bg"], activebackground=C["card"], bd=0).pack(side="left", padx=10)
+        r = row("Timeout de escuta")
+        self._voice_listen_timeout_var = tk.StringVar(value=str(cfg.get("voice_listen_timeout", 5)))
+        tk.Entry(r, textvariable=self._voice_listen_timeout_var, bg=C["border"], fg=C["text"], insertbackground=C["cyan"], relief="flat", font=F["small"], width=8).pack(side="left", padx=4, ipady=6)
+        tk.Label(r, text="segundos para aguardar fala", bg=C["card"], fg=C["text_dim"], font=F["small"]).pack(side="left", padx=8)
+        r = row("Limite da frase")
+        self._voice_phrase_limit_var = tk.StringVar(value=str(cfg.get("voice_phrase_time_limit", 10)))
+        tk.Entry(r, textvariable=self._voice_phrase_limit_var, bg=C["border"], fg=C["text"], insertbackground=C["cyan"], relief="flat", font=F["small"], width=8).pack(side="left", padx=4, ipady=6)
+        tk.Label(r, text="segundos por captura", bg=C["card"], fg=C["text_dim"], font=F["small"]).pack(side="left", padx=8)
         r = row("Motor TTS")
         self._engine_var = tk.StringVar(value=cfg.get("voice_engine", "pyttsx3"))
         for value, label in [("pyttsx3", "pyttsx3 offline"), ("edge-tts", "edge-tts online"), ("elevenlabs", "ElevenLabs")]:
@@ -598,6 +609,12 @@ class NexusApp(ctk.CTk):
         return frame
 
     def _save_config(self):
+        def _coerce_int(value, default):
+            try:
+                return int(str(value).strip())
+            except (TypeError, ValueError):
+                return default
+
         cfg = settings.save({
             "openai_api_key": self._api_key_var.get().strip(),
             "owner_name": self._owner_var.get().strip() or "Nicolas",
@@ -609,6 +626,9 @@ class NexusApp(ctk.CTk):
             "voice_backend": self._voice_backend_var.get(),
             "voice_input_device": self._voice_input_device_var.get().strip(),
             "wake_word": self._wake_word_var.get().strip().lower() or "nexus",
+            "voice_require_wake_word": self._voice_require_wake_word_var.get(),
+            "voice_listen_timeout": _coerce_int(self._voice_listen_timeout_var.get(), 5),
+            "voice_phrase_time_limit": _coerce_int(self._voice_phrase_limit_var.get(), 10),
             "voice_engine": self._engine_var.get(),
             "elevenlabs_api_key": self._eleven_key_var.get().strip(),
             "elevenlabs_voice_id": self._eleven_voice_var.get().strip(),

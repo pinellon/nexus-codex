@@ -1,5 +1,8 @@
 from app.core.command_router import CommandRouter
 from app.core.safety import SafetyManager
+from app.intent_apps import detectar_intent_apps
+from app.intent_desktop_actions import detect_desktop_intent
+from app.intent_router import detectar_intent
 
 
 def test_basic_routes():
@@ -42,3 +45,23 @@ def test_dangerous_confirmation_can_cancel():
     command = router.route("nexus desligar pc")
 
     assert SafetyManager().confirm_if_needed(command, lambda _q: False) == "Acao cancelada."
+
+
+def test_artist_request_uses_smart_music_route():
+    router = CommandRouter("nexus")
+    command = router.route("nexus quero ouvir luan santana")
+
+    assert command.intent == "tocar_musica_smart"
+
+
+def test_close_app_command_maps_to_window_close():
+    command = detect_desktop_intent("fechar spotify")
+
+    assert command is not None
+    assert command.name == "close_window"
+    assert command.params["title"] == "spotify"
+
+
+def test_open_youtube_skips_app_launcher():
+    assert detectar_intent_apps("abrir youtube") is None
+    assert detectar_intent("abrir youtube").name == "abrir_youtube"

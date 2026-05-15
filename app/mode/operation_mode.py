@@ -1,5 +1,6 @@
 # app/mode/operation_mode.py
 
+import argparse
 import app.config
 import app.logs.nexus_logger
 import app.voice.listener
@@ -41,5 +42,12 @@ def execute_mode(args: argparse.Namespace, settings: app.config.Settings, logger
     """Seleciona e executa o modo de operação com base nos argumentos fornecidos."""
     if args.voice_demo:
         run_voice_demo(settings, logger)
-    else:
+    elif getattr(args, "desktop", False):
         theme.main()
+    else:
+        from app.web.server import run as run_web_api
+
+        run_web_api(
+            host=getattr(args, "host", "127.0.0.1"),
+            port=getattr(args, "port", 8001),
+        )

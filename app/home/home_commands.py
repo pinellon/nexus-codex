@@ -168,6 +168,20 @@ class HomeCommandHandler:
         return HomeResult(intent="home", label="Automação Residencial",
                           args={"intent": intent})
 
+    def run_and_wait(self, raw_text: str) -> str:
+        """Executa o comando residencial no fluxo atual e devolve o resultado final."""
+        intent, params = detect_home_intent(raw_text)
+        try:
+            message = self._dispatch(intent, params)
+            if message:
+                self.ui_callback(f"🏠 {message}")
+            return message
+        except Exception as exc:
+            self.log.error("Home execute error: %s", exc)
+            message = f"Erro na automação: {exc}"
+            self.ui_callback(f"⚠️ {message}")
+            return message
+
     # ------------------------------------------------------------------
     # Dispatch
     # ------------------------------------------------------------------
@@ -267,19 +281,27 @@ class HomeCommandHandler:
             return "⏮ Faixa anterior." if r else r.message
 
         if intent == "spotify_vol_up":
-            self._vol_current = min(100, self._vol_current + self.VOL_STEP)
-            r = self.spotify.set_volume(self._vol_current)
+            target_volume = min(100, self._vol_current + self.VOL_STEP)
+            r = self.spotify.set_volume(target_volume)
+            if not r.success:
+                return r.message
+            self._vol_current = target_volume
             return f"🔊 Volume: {self._vol_current}%"
 
         if intent == "spotify_vol_down":
-            self._vol_current = max(0, self._vol_current - self.VOL_STEP)
-            r = self.spotify.set_volume(self._vol_current)
+            target_volume = max(0, self._vol_current - self.VOL_STEP)
+            r = self.spotify.set_volume(target_volume)
+            if not r.success:
+                return r.message
+            self._vol_current = target_volume
             return f"🔉 Volume: {self._vol_current}%"
 
         if intent == "spotify_vol_set":
             vol = int(match.group(1)) if match else 50
-            self._vol_current = vol
             r = self.spotify.set_volume(vol)
+            if not r.success:
+                return r.message
+            self._vol_current = vol
             return f"🔊 Volume definido: {vol}%"
 
         if intent == "spotify_now":
@@ -287,18 +309,18 @@ class HomeCommandHandler:
             return r.message
 
         if intent == "spotify_shuffle_on":
-            self.spotify.shuffle(True)
-            return "🔀 Shuffle ativado."
+            r = self.spotify.shuffle(True)
+            return "🔀 Shuffle ativado." if r.success else r.message
 
         if intent == "spotify_shuffle_off":
-            self.spotify.shuffle(False)
-            return "➡️ Shuffle desativado."
+            r = self.spotify.shuffle(False)
+            return "➡️ Shuffle desativado." if r.success else r.message
 
         if intent in ("spotify_play_query", "spotify_play_artist"):
             query = self._extract_music_query(text)
             if not query:
                 return "Não entendi o que tocar. Tente: 'Toca AC/DC no Spotify'."
-            r = self.spotify.play_mood(query)
+            r = self._play_spotify_query(intent, query)
             return r.message
 
         # ── Status ───────────────────────────────────────────────────
@@ -363,16 +385,33 @@ class HomeCommandHandler:
         cleaned = re.sub(r"\s+(no\s+)?spotify$", "", cleaned, flags=re.I).strip()
         return cleaned
 
+    def _play_spotify_query(self, intent: str, query: str):
+        lower_query = query.lower()
+        if intent == "spotify_play_artist":
+            return self.spotify.play_artist(query)
+        if lower_query.startswith("playlist de "):
+            return self.spotify.play_playlist(query.removeprefix("playlist de ").strip() or query)
+        if lower_query.startswith("playlist "):
+            return self.spotify.play_playlist(query)
+        if lower_query.startswith("album "):
+            return self.spotify.play_album(query.removeprefix("album ").strip() or query)
+        return self.spotify.play_track(query)
+
     def _build_home_status(self) -> str:
         """Resumo rápido do estado da casa."""
         lines = ["**Status da casa:**\n"]
 
-        lights = self.ha.get_lights()
-        on = [l for l in lights if l.state == "on"]
-        off = [l for l in lights if l.state == "off"]
-        lines.append(f"💡 Luzes: {len(on)} ligadas, {len(off)} apagadas")
-        for l in on:
-            lines.append(f"   ▸ {l.friendly_name}")
+        if not self.ha.base_url or not self.ha.token:
+            lines.append("💡 Home Assistant não configurado nas Configurações.")
+        elif not self.ha.is_connected():
+            lines.append("💡 Home Assistant indisponível no momento. Verifique URL, token e conexão.")
+        else:
+            lights = self.ha.get_lights()
+            on = [l for l in lights if l.state == "on"]
+            off = [l for l in lights if l.state == "off"]
+            lines.append(f"💡 Luzes: {len(on)} ligadas, {len(off)} apagadas")
+            for l in on:
+                lines.append(f"   ▸ {l.friendly_name}")
 
         now = self.spotify.currently_playing()
         lines.append(f"\n🎵 {now.message}")

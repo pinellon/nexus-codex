@@ -174,6 +174,35 @@ def test_spotify_pause():
     assert result.success is True
 
 
+def test_spotify_currently_playing_requires_authentication():
+    from app.home.spotify import SpotifyClient
+    settings = _settings()
+    sp = SpotifyClient(settings)
+    sp._token_data = {}
+
+    result = sp.currently_playing()
+
+    assert result.success is False
+    assert "autenticado" in result.message.lower()
+
+
+def test_spotify_invalid_bearer_requests_reauthentication():
+    from app.home.spotify import SpotifyClient
+    settings = _settings()
+    sp = SpotifyClient(settings)
+    sp._token_data = {"access_token": "tok", "expires_at": 9999999999}
+
+    with patch("app.home.spotify.requests.get") as mock_get:
+        mock_get.return_value = MagicMock(
+            status_code=400,
+            text='{"error":{"status":400,"message":"Only valid bearer authentication supported"}}',
+        )
+        result = sp.currently_playing()
+
+    assert result.success is False
+    assert "faça login novamente" in result.message.lower() or "autenticação inválida" in result.message.lower()
+
+
 # ---------------------------------------------------------------------------
 # HomeCommandHandler
 # ---------------------------------------------------------------------------
@@ -206,3 +235,61 @@ def test_handler_extract_music_query():
     assert handler._extract_music_query("toca AC/DC no Spotify") == "AC/DC"
     assert handler._extract_music_query("coloca Metallica") == "Metallica"
     assert handler._extract_music_query("toca playlist de rock") == "playlist de rock"
+
+
+def test_handler_spotify_artist_uses_artist_search():
+    settings = _settings()
+    handler = HomeCommandHandler(settings)
+    handler.spotify.play_artist = MagicMock(return_value=MagicMock(success=True, message="tocando artista"))
+
+    result = handler._dispatch("spotify_play_artist", {"text": "toca AC/DC no Spotify"})
+
+    handler.spotify.play_artist.assert_called_once_with("AC/DC")
+    assert result == "tocando artista"
+
+
+def test_handler_spotify_playlist_query_uses_playlist_search():
+    settings = _settings()
+    handler = HomeCommandHandler(settings)
+    handler.spotify.play_playlist = MagicMock(return_value=MagicMock(success=True, message="tocando playlist"))
+
+    result = handler._dispatch("spotify_play_query", {"text": "toca playlist de rock"})
+
+    handler.spotify.play_playlist.assert_called_once_with("rock")
+    assert result == "tocando playlist"
+
+
+def test_handler_spotify_volume_preserves_state_on_error():
+    settings = _settings()
+    handler = HomeCommandHandler(settings)
+    handler._vol_current = 50
+    handler.spotify.set_volume = MagicMock(return_value=MagicMock(success=False, message="falha volume"))
+
+    result = handler._dispatch("spotify_vol_up", {"text": "volume mais alto"})
+
+    assert result == "falha volume"
+    assert handler._vol_current == 50
+
+
+def test_handler_run_and_wait_returns_final_message():
+    settings = _settings()
+    messages = []
+    handler = HomeCommandHandler(settings, ui_callback=lambda message: messages.append(message))
+    handler._dispatch = MagicMock(return_value="Resumo final da casa")
+
+    result = handler.run_and_wait("status da casa")
+
+    assert result == "Resumo final da casa"
+    assert messages[-1] == "🏠 Resumo final da casa"
+
+
+def test_home_status_reports_unavailable_home_assistant():
+    settings = _settings()
+    handler = HomeCommandHandler(settings)
+    handler.ha.is_connected = MagicMock(return_value=False)
+    handler.spotify.currently_playing = MagicMock(return_value=MagicMock(message="Spotify indisponível"))
+
+    result = handler._build_home_status()
+
+    assert "indisponível" in result.lower()
+    assert "spotify indisponível" in result.lower()

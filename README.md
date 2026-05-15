@@ -1,22 +1,18 @@
-# NEXUS Desktop / NEXUS Codex
+# NEXUS Web / NEXUS Codex
 
-Interface desktop em CustomTkinter com foco em produtividade, automacao, voz e programacao assistida.
+Interface web-first com servidor local para produtividade, automacao, voz e programacao assistida.
 
 ## Recursos atuais
 
-- Chat com timestamps, copiar mensagem e historico por setas.
-- 4 abas: Chat, Automacao, Configuracoes e Logs.
-- Aba Coder com editor, runner, IA de codigo, Git, terminal e snippets.
-- Scaffolding de projetos: FastAPI, React/Vite, Express, Flask, CLI e biblioteca Python.
-- Copiloto local com contexto do projeto, preview de diff e aplicacao de patch.
-- Modo operacional com VoiceLoop, CommandRouter, SafetyManager e EditorBridge.
-- Monitor ao vivo com graficos Canvas de CPU, RAM e disco.
-- Toast notifications no canto inferior direito.
-- Efeitos visuais com scanner animado, ticker de status e microfeedback nos botoes.
-- Sons leves de hover, clique, sucesso, aviso e erro, configuraveis pela UI.
+- Shell web principal em React/Tailwind com views de Chat, Automacao, Memoria, Visao, Mind, Painel, Alertas, Financeiro, Atividade e Configuracoes.
+- Servidor local em `app/web/server.py` para comandos do PC, automacoes, voz, memoria, telemetria e integracoes.
+- Chat com historico, anexos, microfone para ditado e modo de conversa por voz.
+- Visao web com captura de tela, camera, OCR, analise de codigo, objetos e pergunta customizada.
+- NexusMind web com estado, logs, score, proof-of-work, rollback e configuracao do ciclo.
+- Automacao web com catalogo de atalhos e monitor local de CPU, RAM e disco.
+- Memoria Obsidian e grafo de contexto persistente.
+- Coder, scaffolding, patch assistido e contexto de projeto.
 - Configuracoes persistentes em `data/settings.json`.
-- Memoria Obsidian: consulta o vault antes da IA e registra respostas novas em Markdown.
-- Atalhos `Ctrl+1..4`, `Ctrl+K` para focar input e `Ctrl+L` para limpar chat.
 
 ## Novidades adicionadas
 
@@ -40,6 +36,9 @@ Interface desktop em CustomTkinter com foco em produtividade, automacao, voz e p
 ```powershell
 pip install -r requirements.txt
 python main.py
+cd frontend
+cmd /c npm install
+cmd /c npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
 Modo demo de voz:
@@ -48,16 +47,23 @@ Modo demo de voz:
 python main.py --voice-demo
 ```
 
-Nova interface web:
+API web explicitamente:
 
 ```powershell
-python main.py --web-api --host 127.0.0.1 --port 8000
+python main.py --web-api --host 127.0.0.1 --port 8001
 cd frontend
 cmd /c npm install
-cmd /c npm run dev
+cmd /c npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-A interface desktop em CustomTkinter continua disponivel. A nova shell web usa uma base visual orientada a Magic UI e consome a API Python em `app/web/server.py`.
+Interface desktop legada:
+
+```powershell
+pip install -r requirements-desktop.txt
+python main.py --desktop
+```
+
+A shell web e o fluxo principal do produto. O site faz a interface e a API Python em `app/web/server.py` funciona como servidor local para comandos, automacoes, voz, memoria e integracoes. A interface desktop existe apenas para compatibilidade temporaria.
 
 ## Comandos de voz uteis
 
@@ -95,7 +101,10 @@ Nexus, acordar
 
 ## Arquivos principais
 
-- `ui/desktop_app.py`: janela principal.
+- `app/web/server.py`: API HTTP principal da stack web-first.
+- `frontend/`: shell web em React/Tailwind.
+- `ui/desktop_app.py`: interface desktop legada, mantida apenas para compatibilidade temporaria.
+- `requirements-desktop.txt`: dependencias opcionais para a shell desktop legada.
 - `ui/widgets.py`: `LiveGraph`, `PulseIndicator`, `MiniBar` e `Toast`.
 - `app/settings_manager.py`: configuracoes persistentes.
 - `app/command_history.py`: historico de comandos.
@@ -114,9 +123,7 @@ Nexus, acordar
 - `app/vision/`: captura e analise visual de tela/camera.
 - `app/home/`: automacao residencial via Home Assistant e controle Spotify.
 - `app/plugins/`: base para comandos externos sem mexer no nucleo.
-- `main.py`: launcher da UI e modo `--voice-demo`.
-- `app/web/server.py`: API HTTP para a nova interface web.
-- `frontend/`: shell web em React/Tailwind para a migracao da interface.
+- `main.py`: launcher web-first, com modo `--desktop` legado e `--voice-demo`.
 - `ui_coding/coder_panel.py`: painel visual da aba Coder.
 
 ## Ideias futuras

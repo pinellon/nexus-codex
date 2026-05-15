@@ -132,6 +132,22 @@ class VisionCommandHandler:
         return VisionResult(intent="vision", label="Visão Computacional",
                             args={"intent": intent})
 
+    def run_and_wait(self, raw_text: str) -> str:
+        """Executa o comando de visão no fluxo atual e devolve o resultado final."""
+        intent, question = detect_intent(raw_text)
+        self.log.info("Vision intent síncrono: %s | texto: %s", intent, raw_text)
+        self.ui_callback("👁️ Sistema de visão ativado...")
+
+        try:
+            result = self._dispatch(intent, question)
+            self.ui_callback(f"👁️ **Visão NEXUS:**\n\n{result}")
+            return result
+        except Exception as exc:
+            self.log.error("Erro no vision handler: %s", exc)
+            message = f"Erro no sistema de visão: {exc}"
+            self.ui_callback(f"⚠️ {message}")
+            return message
+
     # ------------------------------------------------------------------
     # Execução dos intents
     # ------------------------------------------------------------------

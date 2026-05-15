@@ -46,9 +46,9 @@ def detectar_intent(texto: str) -> Intent | None:
         return Intent("tocar_spotify", {"musica": m.group(1)})
     if m := re.search(r"(?:toca|tocar|play|reproduz)\s+(.+?)\s+no\s+youtube", t):
         return Intent("tocar_youtube", {"musica": m.group(1)})
-    if m := re.search(r"(?:toca|tocar|play|reproduz)\s+(.+)", t):
-        platform = get("default_media", "youtube")
-        return Intent("tocar_spotify" if platform == "spotify" else "tocar_youtube", {"musica": m.group(1)})
+    # "quero ouvir X", "coloca X", "ouvir X" — usa handler inteligente de musica
+    if m := re.search(r"(?:quero\s+ouvir|ouvir|coloca|toca|tocar|play|reproduz)\s+(.+)", t):
+        return Intent("tocar_musica_smart", {"texto": m.group(0)})
     if m := re.search(r"\babr(?:e|ir)\s+(.+\.(?:com|net|org|br|io).*)", t):
         return Intent("abrir_site", {"url": m.group(1)})
 

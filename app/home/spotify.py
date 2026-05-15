@@ -285,7 +285,31 @@ class SpotifyClient:
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self._token_data.get('access_token', '')}"}
 
+    def _ensure_authenticated(self) -> SpotifyResult | None:
+        if self._token_data and self.is_authenticated():
+            return None
+        if not self.client_id:
+            return SpotifyResult(False, "Spotify não configurado. Adicione o Client ID nas Configurações.")
+        if not self.is_authenticated():
+            return SpotifyResult(False, "Spotify não autenticado. Fale 'Nexus, autenticar Spotify'.")
+        return None
+
+    def _auth_failure_result(self, status_code: int, body: str) -> SpotifyResult:
+        message = body.lower()
+        if status_code in (400, 401) and (
+            "only valid bearer authentication supported" in message
+            or "invalid access token" in message
+            or "token expired" in message
+        ):
+            self._token_data = {}
+            self._save_token()
+            return SpotifyResult(False, "Spotify com autenticação inválida. Faça login novamente com 'Nexus, autenticar Spotify'.")
+        return SpotifyResult(False, f"Spotify API {status_code}: {body[:200]}")
+
     def _get(self, endpoint: str) -> SpotifyResult:
+        auth_error = self._ensure_authenticated()
+        if auth_error is not None:
+            return auth_error
         try:
             resp = requests.get(
                 f"{SPOTIFY_API_BASE}/{endpoint}",
@@ -295,11 +319,14 @@ class SpotifyClient:
                 return SpotifyResult(True, "OK", {})
             if resp.status_code == 200:
                 return SpotifyResult(True, "OK", resp.json())
-            return SpotifyResult(False, f"Spotify API {resp.status_code}: {resp.text[:200]}")
+            return self._auth_failure_result(resp.status_code, resp.text)
         except Exception as exc:
             return SpotifyResult(False, f"Erro de conexão: {exc}")
 
     def _put(self, endpoint: str, data: dict) -> SpotifyResult:
+        auth_error = self._ensure_authenticated()
+        if auth_error is not None:
+            return auth_error
         try:
             resp = requests.put(
                 f"{SPOTIFY_API_BASE}/{endpoint}",
@@ -307,11 +334,14 @@ class SpotifyClient:
             )
             if resp.status_code in (200, 204):
                 return SpotifyResult(True, "OK")
-            return SpotifyResult(False, f"Spotify API {resp.status_code}: {resp.text[:200]}")
+            return self._auth_failure_result(resp.status_code, resp.text)
         except Exception as exc:
             return SpotifyResult(False, f"Erro de conexão: {exc}")
 
     def _post(self, endpoint: str, data: dict) -> SpotifyResult:
+        auth_error = self._ensure_authenticated()
+        if auth_error is not None:
+            return auth_error
         try:
             resp = requests.post(
                 f"{SPOTIFY_API_BASE}/{endpoint}",
@@ -319,7 +349,7 @@ class SpotifyClient:
             )
             if resp.status_code in (200, 204):
                 return SpotifyResult(True, "OK")
-            return SpotifyResult(False, f"Spotify API {resp.status_code}: {resp.text[:200]}")
+            return self._auth_failure_result(resp.status_code, resp.text)
         except Exception as exc:
             return SpotifyResult(False, f"Erro de conexão: {exc}")
 

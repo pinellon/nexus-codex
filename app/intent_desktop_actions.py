@@ -20,6 +20,7 @@ def detect_desktop_intent(text: str) -> DesktopIntent | None:
     patterns = [
         (r"^(?:abrir|abre) janela (.+)$", "focus_window", "title"),
         (r"^(?:fechar|fecha) janela (.+)$", "close_window", "title"),
+        (r"^(?:fechar|fecha|encerrar|encerra)\s+(?!janela\b|site\b|pasta\b)(.+)$", "close_window", "title"),
         (r"^(?:minimizar|minimiza) janela (.+)$", "minimize_window", "title"),
         (r"^(?:maximizar|maximiza) janela (.+)$", "maximize_window", "title"),
         (r"^(?:restaurar|restaura) janela (.+)$", "restore_window", "title"),

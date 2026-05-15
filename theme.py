@@ -47,6 +47,13 @@ _agent_handler: AgentCommandHandler | None = None
 _vision_handler: VisionCommandHandler | None = None
 _home_handler: HomeCommandHandler | None = None
 _live_event_listeners: list[Callable[[str, str, dict], None]] = []
+_DESKTOP_LEGACY_NOTICE = (
+    "[NEXUS] A interface desktop entrou em modo legado.\n"
+    "[NEXUS] O fluxo principal do produto agora e web-first:\n"
+    "         - API local: http://127.0.0.1:8001\n"
+    "         - Site local: http://127.0.0.1:5173\n"
+    "[NEXUS] Use o desktop apenas para compatibilidade temporaria."
+)
 
 
 def _confirm_if_needed(intent_name: str, params: dict | None, confirm_callback) -> str | None:
@@ -165,12 +172,10 @@ def _processar_recursos_inteligentes(texto: str, confirm_callback=None) -> str:
         return "Agente autônomo parado."
 
     if command.domain == "vision" and command.intent == "vision":
-        _get_vision_handler().handle(texto)
-        return f"Visão NEXUS iniciada: {command.args.get('intent', 'análise')}"
+        return _get_vision_handler().run_and_wait(texto)
 
     if command.domain == "home" and command.intent == "home":
-        _get_home_handler().handle(texto)
-        return f"Automação residencial iniciada: {command.args.get('intent', 'comando')}"
+        return _get_home_handler().run_and_wait(texto)
 
     if command.domain == "system" and command.intent == "help":
         return (
@@ -374,6 +379,9 @@ def _executar_intent(intent) -> str:
         if name == "tocar_musica":
             from automation.media import escolher_plataforma_e_tocar
             return escolher_plataforma_e_tocar(p.get("musica", ""))
+        if name == "tocar_musica_smart":
+            from automation.media import responder_musica_inteligente
+            return responder_musica_inteligente(p.get("texto", ""))
 
         if name == "abrir_downloads":
             from automation.files import abrir_downloads
@@ -440,7 +448,8 @@ def _responder_ia(texto: str) -> str:
 
 def main():
     """Inicializa o sistema NEXUS."""
-    log_action("Sistema NEXUS iniciando...")
+    log_action("Sistema NEXUS iniciando em modo desktop legado...")
+    print(_DESKTOP_LEGACY_NOTICE)
 
     from app.config import OPENAI_API_KEY
     if not OPENAI_API_KEY or OPENAI_API_KEY == "sua_chave_aqui":

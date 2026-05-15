@@ -209,6 +209,13 @@ def save_to_obsidian(
     """Salva uma nota Markdown formatada no vault Obsidian."""
     tags = tags or []
     now = datetime.datetime.now()
+    resolved_vault, vault_error = _resolve_obsidian_vault(vault_path)
+    if resolved_vault is None:
+        return {
+            "saved": False,
+            "error": vault_error or "Vault Obsidian nao configurado.",
+            "title": title,
+        }
 
     # Frontmatter YAML padrão Obsidian
     tag_str = "\n".join(f"  - {t}" for t in ["nexus", "pesquisa-autonoma"] + tags)
@@ -231,7 +238,7 @@ def save_to_obsidian(
     filename = f"{now.strftime('%Y-%m-%d')} {safe_title}.md"
 
     # Resolve o caminho dentro do vault
-    target_dir = Path(vault_path) / folder
+    target_dir = resolved_vault / folder
     try:
         target_dir.mkdir(parents=True, exist_ok=True)
         target_file = target_dir / filename
@@ -244,6 +251,28 @@ def save_to_obsidian(
         }
     except OSError as exc:
         return {"saved": False, "error": str(exc), "title": title}
+
+
+def _resolve_obsidian_vault(vault_path: str) -> tuple[Path | None, str | None]:
+    candidate_raw = (vault_path or "").strip()
+    candidate: Path | None = None
+    if candidate_raw:
+        candidate = Path(candidate_raw).expanduser()
+    else:
+        try:
+            from app.obsidian_memory import get_vault_path
+        except Exception:
+            get_vault_path = None
+        if get_vault_path is not None:
+            candidate = get_vault_path()
+
+    if candidate is None:
+        return None, "Nenhum vault Obsidian configurado para o agente."
+    if not candidate.exists() or not candidate.is_dir():
+        return None, f"Vault Obsidian invalido: {candidate}"
+    if not (candidate / ".obsidian").exists():
+        return None, f"A pasta configurada nao parece um vault Obsidian: {candidate}"
+    return candidate, None
 
 
 # ---------------------------------------------------------------------------

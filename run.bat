@@ -1,3 +1,3 @@
 @echo off
-py theme.py
+python main.py --web-api --port 8001
 pause

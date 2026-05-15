@@ -13,6 +13,7 @@ class AppIntent:
 
 
 _ARTICLES_RE = re.compile(r"^(o|a|os|as|um|uma|app|aplicativo|programa)\s+", re.IGNORECASE)
+_WEB_DESTINATIONS = {"youtube"}
 
 
 def _clean_app_name(value: str) -> str:
@@ -40,6 +41,8 @@ def detectar_intent_apps(texto: str) -> AppIntent | None:
     if m:
         app = _clean_app_name(m.group(1))
         if app:
+            if app.lower() in _WEB_DESTINATIONS:
+                return None
             return AppIntent("abrir_app", {"app": app})
 
     return None

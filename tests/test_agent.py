@@ -9,7 +9,7 @@ import pytest
 
 from app.agent.agent_commands import extract_task, is_agent_command
 from app.agent.research_agent import _summarize_result, _tool_label
-from app.agent.tools import scrape_page, web_search
+from app.agent.tools import save_to_obsidian, scrape_page, web_search
 
 
 # ---------------------------------------------------------------------------
@@ -204,3 +204,10 @@ def test_agent_stop(tmp_path):
 
     result = agent.run("pesquisa algo", on_event=lambda e: None)
     assert "cancelada" in result.lower() or "interrompido" in result.lower()
+
+
+def test_save_to_obsidian_requires_real_vault(tmp_path):
+    result = save_to_obsidian("Teste", "Conteudo", vault_path=str(tmp_path))
+
+    assert result["saved"] is False
+    assert "vault" in result["error"].lower()
