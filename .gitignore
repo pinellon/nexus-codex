@@ -1,7 +1,11 @@
 ﻿__pycache__/
 *.py[cod]
 .env
+.env.*
+!.env.example
 data/
+data/settings.json
+data/audio_cache/
 *.log
 .DS_Store
 .vscode/

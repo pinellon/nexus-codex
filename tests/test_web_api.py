@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.vision.capture import CapturedImage
 from app.web.server import _module_cards, create_app
+
+
+@pytest.fixture(autouse=True)
+def clear_local_api_token_env(monkeypatch):
+    monkeypatch.delenv("NEXUS_LOCAL_API_TOKEN", raising=False)
 
 
 class DummyEngine:
